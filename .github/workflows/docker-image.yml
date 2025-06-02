@@ -48,6 +48,7 @@ jobs:
         git config --global user.name "github-actions[bot]"
         git add VERSION
         git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}" || echo "No changes to commit"
+        git pull --rebase origin ${{ github.ref }}
         git push origin HEAD:${{ github.ref }}
 
     - name: Log in to GHCR
