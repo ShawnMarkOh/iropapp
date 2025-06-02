@@ -51,4 +51,3 @@ jobs:
         push: true
         tags: |
           ghcr.io/shawnmarkoh/iropapp:latest
-          ghcr.io/shawnmarkoh/iropapp:${{ steps.bump_version.outputs.new_version }}
