@@ -14,71 +14,63 @@ HUBS = [
         "name": "Charlotte Douglas International Airport",
         "iata": "CLT",
         "city": "Charlotte, NC",
-        "lat": 35.214,
-        "lon": -80.943,
         "tz": "America/New_York",
         "runways": [
             {"label": "18L/36R", "heading": 180, "len": 10000},
             {"label": "18C/36C", "heading": 180, "len": 10000},
             {"label": "18R/36L", "heading": 180, "len": 9000},
-            {"label": "05/23", "heading": 54, "len": 7000},
+            {"label": "5/23",    "heading": 50,  "len": 7502},
         ]
     },
     {
         "name": "Philadelphia International Airport",
         "iata": "PHL",
         "city": "Philadelphia, PA",
-        "lat": 39.8744,
-        "lon": -75.2424,
         "tz": "America/New_York",
         "runways": [
-            {"label": "09L/27R", "heading": 90, "len": 10006},
-            {"label": "09R/27L", "heading": 90, "len": 9500},
-            {"label": "17/35", "heading": 170, "len": 9500},
+            {"label": "9L/27R",  "heading": 90,  "len": 10000},
+            {"label": "9R/27L",  "heading": 90,  "len": 9500},
+            {"label": "17/35",   "heading": 170, "len": 6500},
         ]
     },
     {
         "name": "Ronald Reagan Washington National Airport",
         "iata": "DCA",
         "city": "Washington, DC",
-        "lat": 38.8521,
-        "lon": -77.0377,
         "tz": "America/New_York",
         "runways": [
-            {"label": "01/19", "heading": 10, "len": 6900},
-            {"label": "15/33", "heading": 150, "len": 5200},
-            {"label": "04/22", "heading": 40, "len": 5000},
+            {"label": "1/19",    "heading": 10,  "len": 7169},  
+            {"label": "15/33",   "heading": 150, "len": 5204},  
         ]
     },
     {
         "name": "Dayton International Airport",
         "iata": "DAY",
         "city": "Dayton, OH",
-        "lat": 39.9024,
-        "lon": -84.2194,
         "tz": "America/New_York",
         "runways": [
-            {"label": "06L/24R", "heading": 60, "len": 10500},
-            {"label": "18/36", "heading": 180, "len": 7100},
+            {"label": "6L/24R",  "heading": 60,  "len": 10500},
+            {"label": "18/36",   "heading": 180, "len": 7500},
+            {"label": "6R/24L",  "heading": 60,  "len": 7100},
         ]
     },
     {
         "name": "Dallas/Fort Worth International Airport",
         "iata": "DFW",
         "city": "Dallas-Fort Worth, TX",
-        "lat": 32.8998,
-        "lon": -97.0403,
         "tz": "America/Chicago",
         "runways": [
-            {"label": "17C/35C", "heading": 170, "len": 13400},
-            {"label": "18L/36R", "heading": 180, "len": 13400},
-            {"label": "17R/35L", "heading": 170, "len": 13300},
-            {"label": "17L/35R", "heading": 170, "len": 8500},
+            {"label": "13L/31R", "heading": 130, "len": 9000},
             {"label": "13R/31L", "heading": 130, "len": 9200},
-            {"label": "13L/31R", "heading": 130, "len": 8200}
+            {"label": "17C/35C", "heading": 170, "len": 13400},
+            {"label": "17L/35R", "heading": 170, "len": 8500},
+            {"label": "17R/35L", "heading": 170, "len": 13400},
+            {"label": "18L/36R", "heading": 180, "len": 13300},
+            {"label": "18R/36L", "heading": 180, "len": 13400},
         ]
     }
 ]
+
 
 @app.route('/')
 def dashboard():
