@@ -4,7 +4,7 @@ services:
     build: .
     container_name: iropapp
     ports:
-      - "6000:6000"
+      - "8550:8550"
     restart: unless-stopped
     volumes:
       - .:/app

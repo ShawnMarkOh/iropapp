@@ -16,7 +16,7 @@ RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 # Expose port
-EXPOSE 6000
+EXPOSE 8550
 
 # Run Gunicorn server.
-CMD ["gunicorn", "--bind", "0.0.0.0:6000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8550", "app:app"]
