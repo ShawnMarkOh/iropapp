@@ -92,19 +92,6 @@ def save_log(log):
     with open(LOG_FILE, "w") as f:
         json.dump(log, f)
 
-def update_hour_data(hub_iata, date_ymd, hour, hour_data):
-    log = get_log()
-    if hub_iata not in log:
-        log[hub_iata] = {}
-    if date_ymd not in log[hub_iata]:
-        log[hub_iata][date_ymd] = {}
-    log[hub_iata][date_ymd][str(hour)] = hour_data
-    save_log(log)
-
-def get_day_data(hub_iata, date_ymd):
-    log = get_log()
-    return log.get(hub_iata, {}).get(date_ymd, {})
-
 def parse_iso_to_local(dtstr, tz):
     try:
         dt_utc = datetime.fromisoformat(dtstr.replace("Z", "+00:00"))
@@ -114,6 +101,24 @@ def parse_iso_to_local(dtstr, tz):
 
 def get_ymd(dt, tz):
     return dt.astimezone(pytz.timezone(tz)).strftime("%Y-%m-%d")
+
+def update_hour_data(hub_iata, date_ymd, hour, hour_data, now_local_hour):
+    log = get_log()
+    if hub_iata not in log:
+        log[hub_iata] = {}
+    if date_ymd not in log[hub_iata]:
+        log[hub_iata][date_ymd] = {}
+    # Only update *future or present* hours, but not past
+    if int(hour) >= now_local_hour:
+        log[hub_iata][date_ymd][str(hour)] = hour_data
+    # For past hours: Only set if it was never recorded before
+    elif str(hour) not in log[hub_iata][date_ymd]:
+        log[hub_iata][date_ymd][str(hour)] = hour_data
+    save_log(log)
+
+def get_day_data(hub_iata, date_ymd):
+    log = get_log()
+    return log.get(hub_iata, {}).get(date_ymd, {})
 
 @app.route('/')
 def dashboard():
@@ -148,27 +153,31 @@ def api_weather(iata):
 
     now_local = datetime.now(pytz.timezone(hub["tz"]))
     today_ymd = get_ymd(now_local, hub["tz"])
+    now_local_hour = now_local.hour
 
-    # Merge persisted log with live hourly data to get 24h
     log = get_log()
     saved_hours = log.get(iata, {}).get(today_ymd, {})
 
-    hourly_full = []
+    # Update saved data: Only update current+future hours, never past hours
     for period in hourly_periods:
         local = parse_iso_to_local(period["startTime"], hub["tz"])
-        if not local: continue
+        if not local:
+            continue
         hour = local.hour
         ymd = get_ymd(local, hub["tz"])
         if ymd == today_ymd:
-            update_hour_data(iata, today_ymd, hour, period)
-            saved_hours[str(hour)] = period
-    # Fill out all 24 hours
+            update_hour_data(iata, today_ymd, hour, period, now_local_hour)
+            # Always update in-memory for the loop below
+            if int(hour) >= now_local_hour or str(hour) not in saved_hours:
+                saved_hours[str(hour)] = period
+
+    # Fill all 24 hours with whatever is in saved_hours, fallback to API (or blank)
+    hourly_full = []
     for hour in range(24):
         h = str(hour)
         if h in saved_hours:
             hourly_full.append(saved_hours[h])
         else:
-            # look for a live period with this hour (if not in log)
             period = next((p for p in hourly_periods if parse_iso_to_local(p["startTime"], hub["tz"]) and parse_iso_to_local(p["startTime"], hub["tz"]).hour == hour), None)
             if period:
                 hourly_full.append(period)
