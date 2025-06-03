@@ -342,3 +342,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   loadDashboard();
   scheduleHourlyRefresh();
 });
+// Refresh the page and make fresh API calls every 10 minutes (600,000 ms)
+setInterval(function() {
+    window.location.reload();
+}, 600000); // 600000 ms = 10 minutes
