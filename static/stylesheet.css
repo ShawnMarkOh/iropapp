@@ -1,0 +1,39 @@
+body {background: #f3f6fa; color: #232323; min-height: 100vh;}
+#top-bar {background: #213f75; color: #fff; width: 100%; padding: 18px 0 14px 0; text-align: center; font-size: 2.1rem; letter-spacing: 2px; font-weight: 600; margin-bottom: 10px; box-shadow: 0 2px 7px rgba(33,63,117,0.10); position: sticky; top: 0; z-index: 100;}
+#groundstop-banner {background: #ff2323; color: #fff; font-weight: 700; font-size: 1.35rem; padding: 18px 0; text-align: center; border-radius: 0 0 14px 14px; box-shadow: 0 2px 12px rgba(230,0,0,0.15); margin-bottom: 12px; border-bottom: 3px solid #b20c0c; display:none;}
+#briefing-summary {max-width: 1600px; margin: 18px auto 20px auto; padding: 20px 26px 16px 26px; background: #fffbe8; border-left: 8px solid #ffa600; border-radius: 13px; font-size: 1.21rem; font-weight: 500; box-shadow: 0 2px 12px rgba(255, 196, 64, .10); color: #724a00; width: 95vw;}
+.day-header {font-size: 1.5rem; color: #20375a; font-weight: 700; letter-spacing: 0.8px; margin: 32px 0 12px 18px; padding-top: 16px; padding-bottom: 3px; width: 100%; border-bottom: 2px solid #eaeaea;}
+.risk-high {color: #e53e3e; font-weight: bold; font-size: 1.06rem; margin-top: 7px; letter-spacing: 0.5px;}
+.risk-partial {color: #f59e42; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
+.risk-normal {color: #38a169; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
+.risk-wind {color: #2968c6; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
+.risk-wind-high {color: #db710a; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
+.risk-wind-partial {color: #6c35a3; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
+.short-forecast {font-size: 1.04rem; margin-bottom: 5px; font-weight: 500;}
+.base-details {color: #374151; font-size: 0.98rem; margin-bottom: 6px;}
+.hourly-breakdown {margin-top: 10px; width: 100%; font-size: 0.97rem; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0;}
+.hour-cell {display: inline-block; margin: 2px 2px 2px 0; padding: 2px 7px; border-radius: 7px; background: #cbe7f8; color: #184866; font-weight: 500; font-size: 0.96rem; border: 2px solid #b5d2fd; min-width: 40px; text-align: center; cursor: pointer; transition: border .15s, background .15s; position: relative; z-index: 1;}
+.hour-thunder {background: #f7baba; color: #8b2525; font-weight: 600; border-color: #e53e3e;}
+.hour-severe {background: #ffe1b6; color: #c97911; font-weight: 700; border-color: #c97911;}
+.hour-clear {background: #d0f5cf; color: #1b661b; font-weight: 500; border-color: #38a169;}
+.hour-other {background: #f2efb9; color: #847900; font-weight: 500; border-color: #c7c441;}
+.hour-nodata {background: #efefef; color: #9b9b9b; border-color: #ddd; cursor: default; font-style: italic;}
+.hour-wind {background: #bad7fa; color: #1560a8; font-weight: 600; border-color: #2968c6;}
+.hour-wind-high {background: #ffe9b8; color: #db710a; font-weight: 700; border-color: #db710a;}
+.hour-wind-partial {background: #e6d4f7; color: #6c35a3; font-weight: 600; border-color: #6c35a3;}
+.hour-current {z-index: 1 !important; animation: pulse-highlight 2s infinite cubic-bezier(.4,0,.6,1);}
+@keyframes pulse-highlight {0% { box-shadow: 0 0 0 0 rgba(38,120,230,0.32);} 50% { box-shadow: 0 0 0 8px rgba(38,120,230,0.09);} 100% { box-shadow: 0 0 0 0 rgba(38,120,230,0.32);}}
+.hour-current::after {content: ""; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 7px; background: rgba(190,210,245,0.41); pointer-events: none; mix-blend-mode: lighten;}
+.hourly-label {font-size: 0.96rem; color: #656565; font-weight: 600; min-width: 80px; margin-right: 7px; margin-bottom: 2px; display: inline-block;}
+.runway-safe { color: #178a2c; font-weight: 600;}
+.runway-unsafe { color: #c4171d; font-weight: 600;}
+.modal-table th { font-weight: 600; background: #f5f6fa; border-bottom: 1px solid #dee2e6;}
+.modal-table td, .modal-table th { padding: 4px 8px; font-size: 1.01rem;}
+.modal-table { width: 100%; margin-top: 8px; border-collapse: collapse; }
+.modal-table tr:not(:last-child) td { border-bottom: 1px solid #f0f0f0;}
+.footer {margin: 36px auto 26px auto; max-width:1200px; text-align:center; color:#6a788a; font-size:1rem;}
+.modal-header {background: #f3f6fa;}
+.faa-event-mark {color:#c20019; font-size:1.33em; font-weight:bold; margin-left: 2px; vertical-align:middle;}
+.faa-event-summary {background:#faeaea;color:#c20019;border-left:4px solid #c20019;padding:6px 10px;margin:10px 0 0 0;font-size:.99rem;border-radius:7px;}
+@media (max-width: 992px) {#briefing-summary { font-size:1rem; } .day-header { font-size:1.16rem; }}
+@media (max-width: 600px) {#briefing-summary { padding: 10px 4vw; }}
