@@ -120,56 +120,44 @@ def get_latlon_for_hub(iata):
     return lookup.get(iata, (None, None))
 
 def parse_faa_atcscc_advzy(date_dt):
-    """
-    Fetch and parse FAA ATCSCC ADVZY (Advisory) for operational events at major hubs.
-    Prints detected events for your hubs in the terminal.
-    """
-    import requests
-    FAA_ADVZY_URL = "https://www.fly.faa.gov/adv/adv_otherdis.jsp"
+    # date_dt is a datetime.date or datetime.datetime
     adv_date = date_dt.strftime("%m%d%Y")
     url = f"{FAA_ADVZY_URL}?advn=33&adv_date={adv_date}&facId=ATCSCC&title=ATCSCC%20ADVZY%20033%20DCC%20OPERATIONS%20PLAN&titleDate={date_dt.strftime('%m/%d/%Y')}"
     try:
         resp = requests.get(url, timeout=30)
         if not resp.ok:
-            print(f"FAA advisory fetch failed with status {resp.status_code}")
             return []
         text = resp.text
+        # Simple regex-based parse for each hub
         events = []
-        # Compose IATA regex for all hubs
-        HUB_IATAS = ["CLT", "PHL", "DCA", "DAY", "DFW"]
-        pattern = re.compile(
-            r'((?:After|Until|from|at)\s+(\d{4})Z.*?)((CLT|PHL|DCA|DAY|DFW)[^\n.]*?(Ground Stop|Delay Program|SWAP|thunderstorm|severe|closure|runway|equipment|impact|recovery|VIP|possible|expected|probable|capping|tunneling|hotline|diversion|SWAP|CDR))',
-            re.I
-        )
+
+        # Compose IATA regex for all hubs, also allow city names, case-insensitive
+        pattern = re.compile(r'((?:After|Until|from|at)\s+(\d{4})Z.*?)((CLT|PHL|DCA|DAY|DFW)[^\n.]*?(Ground Stop|Delay Program|SWAP|thunderstorm|severe|closure|runway|equipment|impact|recovery|VIP|possible|expected|probable|capping|tunneling|hotline|diversion|SWAP|CDR))', re.I)
         # Find time-tagged hub-specific events
         for match in pattern.finditer(text):
             when_full, hour_z, event_desc = match.group(1), match.group(2), match.group(3)
-            affected_iatas = [iata for iata in HUB_IATAS if iata in event_desc.upper()]
+            affected_iatas = [iata for iata in ["CLT","PHL","DCA","DAY","DFW"] if iata in event_desc.upper()]
             for iata in affected_iatas:
-                event_obj = {
+                events.append({
                     "iata": iata,
                     "hour_z": int(hour_z[:2]),  # e.g. "1900" -> 19
                     "desc": event_desc.strip(),
                     "when": when_full.strip(),
                     "zulu_time": f"{hour_z}Z",
-                }
-                print(f"FAA EVENT DETECTED: {json.dumps(event_obj, indent=2)}")  # Terminal output
-                events.append(event_obj)
+                })
         # Simpler parse for "VIP Movement" and "Runway Closure"
-        for iata in HUB_IATAS:
+        for iata in ["CLT","PHL","DCA","DAY","DFW"]:
+            # Look for any lines with the IATA code
             for m in re.finditer(rf'({iata}[^.]*?(Ground Stop|Delay Program|closure|runway|VIP|impact|possible|expected|probable|capping|tunneling|hotline|diversion|SWAP|CDR)[^.]*\.)', text, re.I):
-                event_obj = {
+                events.append({
                     "iata": iata,
                     "hour_z": None,
                     "desc": m.group(0).strip(),
                     "when": "",
                     "zulu_time": "",
-                }
-                print(f"FAA EVENT DETECTED: {json.dumps(event_obj, indent=2)}")  # Terminal output
-                events.append(event_obj)
+                })
         return events
-    except Exception as e:
-        print(f"Error fetching/parsing FAA advisory: {e}")
+    except Exception:
         return []
 
 FAA_EVENTS_CACHE = {}
