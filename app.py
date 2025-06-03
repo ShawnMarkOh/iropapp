@@ -4,7 +4,7 @@ import json
 from flask import Flask, jsonify, render_template, send_from_directory
 from flask_cors import CORS
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import pytz
 
 app = Flask(__name__)
@@ -120,7 +120,7 @@ def get_latlon_for_hub(iata):
     return lookup.get(iata, (None, None))
 
 def parse_faa_atcscc_advzy(date_dt):
-    # date_dt is a datetime.date or datetime.datetime
+    # Only extract events under TERMINAL ACTIVE and TERMINAL PLANNED for "UNTIL ####" and "AFTER ####"
     adv_date = date_dt.strftime("%m%d%Y")
     url = f"{FAA_ADVZY_URL}?advn=33&adv_date={adv_date}&facId=ATCSCC&title=ATCSCC%20ADVZY%20033%20DCC%20OPERATIONS%20PLAN&titleDate={date_dt.strftime('%m/%d/%Y')}"
     try:
@@ -128,36 +128,59 @@ def parse_faa_atcscc_advzy(date_dt):
         if not resp.ok:
             return []
         text = resp.text
-        # Simple regex-based parse for each hub
-        events = []
 
-        # Compose IATA regex for all hubs, also allow city names, case-insensitive
-        pattern = re.compile(r'((?:After|Until|from|at)\s+(\d{4})Z.*?)((CLT|PHL|DCA|DAY|DFW)[^\n.]*?(Ground Stop|Delay Program|SWAP|thunderstorm|severe|closure|runway|equipment|impact|recovery|VIP|possible|expected|probable|capping|tunneling|hotline|diversion|SWAP|CDR))', re.I)
-        # Find time-tagged hub-specific events
-        for match in pattern.finditer(text):
-            when_full, hour_z, event_desc = match.group(1), match.group(2), match.group(3)
-            affected_iatas = [iata for iata in ["CLT","PHL","DCA","DAY","DFW"] if iata in event_desc.upper()]
-            for iata in affected_iatas:
+        # Only consider text between 'TERMINAL ACTIVE:' and 'TERMINAL PLANNED:' for ACTIVE,
+        # and 'TERMINAL PLANNED:' to next section for PLANNED
+        sections = {}
+        # Normalize all line endings
+        text = text.replace('\r\n', '\n')
+        # Find relevant section start/ends
+        m_active = re.search(r'TERMINAL ACTIVE:(.*?)(TERMINAL PLANNED:|$)', text, re.DOTALL)
+        m_planned = re.search(r'TERMINAL PLANNED:(.*?)(\n\n|\r\n\r\n|$)', text, re.DOTALL)
+        sections['active'] = m_active.group(1) if m_active else ''
+        sections['planned'] = m_planned.group(1) if m_planned else ''
+
+        # Helper: extract events for each section
+        def extract_events(section_text, when_type):
+            # Matches: "UNTIL 1859 -DEN GROUND DELAY PROGRAM", "AFTER 1400 -MIA/FLL/PBI GROUND STOPS POSSIBLE"
+            pattern = re.compile(rf'\b({when_type}) (\d{{4}})\s*-([^\n]+)', re.IGNORECASE)
+            events = []
+            for m in pattern.finditer(section_text):
+                when = m.group(1).upper()
+                ztime = m.group(2)
+                desc = m.group(3).strip()
+                # IATAs: find all 3-letter IATA codes in the desc, allowing for groups like MIA/FLL/PBI
+                iatas = re.findall(r'\b([A-Z]{3})\b', desc)
+                if not iatas:
+                    continue
                 events.append({
-                    "iata": iata,
-                    "hour_z": int(hour_z[:2]),  # e.g. "1900" -> 19
-                    "desc": event_desc.strip(),
-                    "when": when_full.strip(),
-                    "zulu_time": f"{hour_z}Z",
+                    "when_type": when,
+                    "zulu_time": ztime,
+                    "desc": desc,
+                    "iatas": iatas,
                 })
-        # Simpler parse for "VIP Movement" and "Runway Closure"
-        for iata in ["CLT","PHL","DCA","DAY","DFW"]:
-            # Look for any lines with the IATA code
-            for m in re.finditer(rf'({iata}[^.]*?(Ground Stop|Delay Program|closure|runway|VIP|impact|possible|expected|probable|capping|tunneling|hotline|diversion|SWAP|CDR)[^.]*\.)', text, re.I):
-                events.append({
+            return events
+
+        # Only "UNTIL" and "AFTER"
+        events = []
+        for when_type in ("UNTIL", "AFTER"):
+            events += extract_events(sections['active'], when_type)
+            events += extract_events(sections['planned'], when_type)
+
+        # Expand events for each hub
+        result = []
+        for event in events:
+            for iata in event["iatas"]:
+                result.append({
                     "iata": iata,
-                    "hour_z": None,
-                    "desc": m.group(0).strip(),
-                    "when": "",
-                    "zulu_time": "",
+                    "when_type": event["when_type"],
+                    "zulu_time": event["zulu_time"],
+                    "desc": event["desc"],
+                    "when": f"{event['when_type']} {event['zulu_time']}",
                 })
-        return events
-    except Exception:
+        return result
+
+    except Exception as ex:
         return []
 
 FAA_EVENTS_CACHE = {}
@@ -174,32 +197,31 @@ def get_faa_events_by_day(dt):
     return events
 
 def get_events_for_hub_day(hub_iata, local_dt, tz_str):
-    # Return a list of events for this hub on this day, with mapping to local hours
+    """Return a list of events for this hub on this day, with Zulu to local hour conversion."""
     utc_dt = local_dt.astimezone(pytz.utc)
     events = get_faa_events_by_day(utc_dt.date())
     result = []
     for e in events:
         if e["iata"] != hub_iata:
             continue
-        # If the event is for a specific hour, map that hour (Zulu) to local
-        if e["hour_z"] is not None:
-            z_hour = e["hour_z"]
-            local_hour = (z_hour + pytz.timezone(tz_str).utcoffset(local_dt.replace(hour=0,minute=0,second=0, microsecond=0)).total_seconds() // 3600) % 24
-            result.append({
-                "local_hour": int(local_hour),
-                "z_hour": z_hour,
-                "desc": e["desc"],
-                "zulu_time": e["zulu_time"],
-                "when": e["when"]
-            })
-        else:
-            result.append({
-                "local_hour": None,
-                "z_hour": None,
-                "desc": e["desc"],
-                "zulu_time": "",
-                "when": e["when"]
-            })
+        z_hour = int(e["zulu_time"][:2])
+        z_min = int(e["zulu_time"][2:])
+        # The event day is always "today" in Zulu. We must convert to local (may change local day/hours).
+        # Compose a UTC datetime with today's date, that hour/minute, then convert to local
+        dt_utc = datetime(utc_dt.year, utc_dt.month, utc_dt.day, z_hour, z_min, tzinfo=pytz.utc)
+        dt_local = dt_utc.astimezone(pytz.timezone(tz_str))
+        result.append({
+            "local_hour": dt_local.hour,
+            "local_minute": dt_local.minute,
+            "local_time_str": dt_local.strftime("%H:%M"),
+            "z_hour": z_hour,
+            "z_minute": z_min,
+            "desc": e["desc"],
+            "zulu_time": e["zulu_time"],
+            "when": e["when"],
+            "when_type": e["when_type"],
+            "local_time_iso": dt_local.isoformat(),
+        })
     return result
 
 def fetch_and_log_weather(iata):
@@ -353,8 +375,6 @@ def groundstops_api():
     except Exception:
         pass
     return jsonify({})
-    
-    
 
 @app.route('/static/<path:filename>')
 def custom_static(filename):
