@@ -36,10 +36,14 @@
     .hourly-label {font-size: 0.96rem; color: #656565; font-weight: 600; min-width: 80px; margin-right: 7px; margin-bottom: 2px; display: inline-block;}
     .runway-safe { color: #178a2c; font-weight: 600;}
     .runway-unsafe { color: #c4171d; font-weight: 600;}
+    .modal-table th { font-weight: 600; background: #f5f6fa; border-bottom: 1px solid #dee2e6;}
+    .modal-table td, .modal-table th { padding: 4px 8px; font-size: 1.01rem;}
+    .modal-table { width: 100%; margin-top: 8px; border-collapse: collapse; }
+    .modal-table tr:not(:last-child) td { border-bottom: 1px solid #f0f0f0;}
     .footer {margin: 36px auto 26px auto; max-width:1200px; text-align:center; color:#6a788a; font-size:1rem;}
-    .modal-dialog { max-width: 400px; }
-    @media (max-width: 992px) {briefing-summary { font-size:1rem; } .day-header { font-size:1.16rem;}}
-    @media (max-width: 600px) {briefing-summary { padding: 10px 4vw; }}
+    .modal-header {background: #f3f6fa;}
+    @media (max-width: 992px) {#briefing-summary { font-size:1rem; } .day-header { font-size:1.16rem;}}
+    @media (max-width: 600px) {#briefing-summary { padding: 10px 4vw; }}
   </style>
 </head>
 <body>
@@ -73,7 +77,7 @@ function windToKts(val) {if (!val) return 0;let v = parseFloat(val);if (/mph/.te
 function windToMPH(val) {if (!val) return 0;let v = parseFloat(val);if (/mph/.test(val)) return v;return v * 1.15078;}
 function crosswindComponent(runwayHeading, windDir, windKts) {let windDeg = windDirToDeg(windDir);if (windDeg === null) return 0;let angle = Math.abs(runwayHeading - windDeg);if (angle > 180) angle = 360 - angle;let rad = angle * Math.PI / 180;let cross = Math.abs(windKts * Math.sin(rad));return cross;}
 function getHourWindRisk(spd, cross) {if (spd > 50) return {risk:"high", txt:"Wind > 50 kts", class:"hour-wind"};if (spd > 35) return {risk:"wind-high", txt:"High wind ("+spd+" kts)", class:"hour-wind-high"};if (spd > 0 && spd > 27) return {risk:"partial", txt:"Wind ("+spd+" kts)", class:"hour-wind"};if (cross > 27) return {risk:"high", txt:"Crosswind "+cross+" kts", class:"hour-wind"};if (cross > 20) return {risk:"wind-high", txt:"High crosswind ("+cross+" kts)", class:"hour-wind-high"};if (cross > 15) return {risk:"wind-partial", txt:"Moderate crosswind ("+cross+" kts)", class:"hour-wind-partial"};return null;}
-function analyzeRunwaySafety(runways, windDir, windKts) {let runwayResults = [];for (let rw of runways) {if (rw.len < 6000) continue;let cross = crosswindComponent(rw.heading, windDir, windKts);let safe = (windKts <= 50) && (cross <= 27);let warning = !safe && windKts > 50 ? "UNSAFE WIND" : (!safe ? "UNSAFE CROSSWIND" : "SAFE");runwayResults.push({label: rw.label, cross: Math.round(cross), safe: safe, warning: warning});}return runwayResults;}
+function analyzeRunwaySafety(runways, windDir, windKts) {let runwayResults = [];for (let rw of runways) {if (rw.len < 6000) continue;let cross = crosswindComponent(rw.heading, windDir, windKts);let safe = (windKts <= 50) && (cross <= 27);let warning = !safe && windKts > 50 ? "UNSAFE WIND" : (!safe ? "UNSAFE CROSSWIND" : "SAFE");runwayResults.push({label: rw.label, cross: Math.round(cross), safe: safe, warning: warning, len: rw.len});}return runwayResults;}
 function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, ymdStr, runways) {let hourData = {};for (const period of hourlyPeriods) {const local = new Date(new Date(period.startTime).toLocaleString("en-US", {timeZone: tz}));const ymd = local.getFullYear() + "-" + String(local.getMonth()+1).padStart(2, "0") + "-" + String(local.getDate()).padStart(2, "0");if (ymd !== dateYMD) continue;hourData[local.getHours()] = { ...period, local };}let hourBlocks = [];let rawRisks = [];for (let h = 0; h < 24; h++) {let period = hourData[h];let riskObj, txt, shortF="", detailedF="", windRisk=null, windTxt="", spdKts=0, spdMPH=0, dir="";let runwayStatus = [];if (period) {riskObj = getHourRisk((period.shortForecast || "") + " " + (period.detailedForecast || ""));txt = period.shortForecast || "";shortF = period.shortForecast || "";detailedF = period.detailedForecast || "";if (period.windSpeed && period.windSpeed !== "--") {spdKts = windToKts(period.windSpeed);spdMPH = windToMPH(period.windSpeed);}if (period.windDirection) dir = period.windDirection;let windRiskObj = getHourWindRisk(spdKts, 0);runwayStatus = analyzeRunwaySafety(runways, dir, spdKts);let crossMax = Math.max(...runwayStatus.map(rw=>rw.cross));let crossRiskObj = getHourWindRisk(spdKts, crossMax);if (windRiskObj && (!riskObj || windRiskObj.risk==="high" || windRiskObj.risk==="wind-high" || windRiskObj.risk==="wind-partial")) {windRisk = windRiskObj.risk; windTxt = windRiskObj.txt;if (windRiskObj.risk==="high") riskObj = { risk:"high", key:"Wind", hourClass:"hour-wind" };else if (windRiskObj.risk==="wind-high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-high" };else if (windRiskObj.risk==="wind-partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-partial" };else if (windRiskObj.risk==="partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind" };}if (crossRiskObj && (!riskObj || crossRiskObj.risk==="high" || crossRiskObj.risk==="wind-high" || crossRiskObj.risk==="wind-partial")) {windRisk = crossRiskObj.risk; windTxt = crossRiskObj.txt;if (crossRiskObj.risk==="high") riskObj = { risk:"high", key:"Wind", hourClass:"hour-wind" };else if (crossRiskObj.risk==="wind-high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-high" };else if (crossRiskObj.risk==="wind-partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-partial" };else if (crossRiskObj.risk==="partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind" };}} else {riskObj = { risk: "nodata", key: null, hourClass: "hour-nodata" };txt = "No data"; shortF = ""; detailedF = "";}rawRisks.push(riskObj.risk);hourBlocks.push({hour: h,txt: txt,risk: riskObj.risk,hourClass: riskObj.hourClass + (highlightHour === h ? " hour-current" : ""),isCurrent: (highlightHour === h),baseLabel: baseLabel || "",ymd: ymdStr,shortF: shortF,detailedF: detailedF,riskClass: riskObj.risk,windRisk,windTxt,windDir: dir,windKts: spdKts,windMPH: spdMPH,runways: runwayStatus,isBrief: false});}let countHigh = 0, countPartial = 0, total = 0;let curType = null, curLen = 0, curStart = 0;let highMark = Array(24).fill(false), partialMark = Array(24).fill(false);for (let i=0; i<=24; i++) {let r = i<24 ? rawRisks[i] : null;if (r === curType) { curLen++; }else {if ((curType === "high" || curType === "partial") && curLen > 1) {for (let j=curStart; j<curStart+curLen; j++) {if (curType === "high") highMark[j] = true;else if (curType === "partial") partialMark[j] = true;}}curType = r;curLen = 1;curStart = i;}}for (let h=0; h<24; h++) {if (rawRisks[h] !== "nodata") total++;if (highMark[h]) countHigh++;else if (partialMark[h]) countPartial++;}for (let h=0; h<24; h++) {if ((rawRisks[h]==="high" || rawRisks[h]==="partial") && !highMark[h] && !partialMark[h]) {hourBlocks[h].hourClass += " hour-brief"; hourBlocks[h].isBrief = true;}}return {hourBlocks,percentHigh: total ? Math.round((countHigh/total)*100) : 0,percentPartial: total ? Math.round((countPartial/total)*100) : 0,total};}
 function getHourRisk(forecast) {if (!forecast) return {risk:"clear", key:null, hourClass: "hour-clear"};let forecastL = forecast.toLowerCase();if (/thunderstorms likely|severe thunderstorm|severe t[- ]?storm|tstm likely|t\.storm likely|t[- ]?storm likely/.test(forecastL)) {return { risk: "high", key: "Thunder", hourClass: "hour-thunder" };}if (/thunderstorm|tstm|t-storm|t\.storm/.test(forecastL)) {if (/slight chance|chance/.test(forecastL)) {return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}if (/severe|tornado|hail|damaging wind|squall|snow|blizzard|ice|sleet|wintry|freezing rain|freezing drizzle/.test(forecastL)) {return { risk: "high", key: "Severe", hourClass: "hour-severe" };}if (/heavy rain|flood|downpour|fog|low visibility|low clouds/.test(forecastL)) {return { risk: "partial", key: null, hourClass: "hour-other" };}return { risk: "clear", key: null, hourClass: "hour-clear" };}
 function formatLocalDateOnly(dtIso, tz) {try {const d = new Date(dtIso);return new Intl.DateTimeFormat('en-US', {weekday: "short", month: "short", day: "numeric", year: "numeric",timeZone: tz}).format(d);} catch { return dtIso; }}
@@ -81,7 +85,6 @@ function getDailyAssessment(percentHigh, percentPartial) {if (percentHigh >= 30)
 async function getHubs() { const resp = await fetch('/api/hubs'); HUBS = await resp.json(); return HUBS; }
 async function fetchGroundStops() { let res = await fetch('/api/groundstops'); return await res.json(); }
 async function fetchWeather(iata) { let res = await fetch('/api/weather/' + iata); return await res.json(); }
-
 async function loadDashboard() {
   const dashboard = document.getElementById('dashboard');
   dashboard.innerHTML = '<div style="font-size:1.2rem; padding:22px;">Loading weather data for all bases...</div>';
@@ -218,33 +221,42 @@ function showHourModal(block, base, dayLabel) {
   else riskStr = `<span class="risk-normal">No Weather Risk</span>`;
   let runwayStatusHTML = "";
   if (block.runways && block.runways.length > 0) {
-    runwayStatusHTML = `<div style="margin-top:9px;"><b>Runway Status:</b><br>`;
-    block.runways.forEach(rw => {
-      runwayStatusHTML += `<span class="${rw.safe ? "runway-safe" : "runway-unsafe"}">Runway ${rw.label.split("/")[0]} ${rw.safe ? "SAFE" : rw.warning}</span> `;
-    });
-    runwayStatusHTML += `</div>`;
+    runwayStatusHTML = `
+      <table class="modal-table mt-2">
+        <thead>
+          <tr>
+            <th>Runway</th>
+            <th>Length (ft)</th>
+            <th>Crosswind (kts)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${block.runways.map(rw =>
+            `<tr>
+              <td>${rw.label}</td>
+              <td>${rw.len}</td>
+              <td>${rw.cross}</td>
+              <td><span class="${rw.safe ? "runway-safe" : "runway-unsafe"}">${rw.safe ? "SAFE" : rw.warning}</span></td>
+            </tr>`
+          ).join("")}
+        </tbody>
+      </table>
+    `;
   }
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
-    <div><span style="font-weight:600;">Local Date:</span> ${block.ymd}</div>
-    <div><span style="font-weight:600;">Hour:</span> ${String(block.hour).padStart(2, "0")}:00</div>
-    <div style="margin-top:5px;">
-      <span style="font-weight:600;">Risk:</span> ${riskStr}
-      ${block.windTxt ? `<div style="margin-top:4px;font-weight:600;" class="risk-wind">${block.windTxt}</div>` : ""}
-      ${(block.windKts>0)?`<div style="margin-top:4px;">Wind: <b>${block.windKts.toFixed(0)} kts</b> (${block.windMPH.toFixed(0)} mph)${block.windDir?` from ${block.windDir}`:""}</div>`:""}
-    </div>
-    <div style="margin-top:7px;">
-      <span style="font-weight:600;">Short Forecast:</span> <br>
-      <span>${block.shortF || "No data"}</span>
-    </div>
-    ${block.detailedF ? `
-    <div style="margin-top:7px;">
-      <span style="font-weight:600;">Detailed Forecast:</span> <br>
-      <span>${block.detailedF}</span>
-    </div>
-    ` : ""}
+    <table class="modal-table">
+      <tr><th>Date</th><td>${block.ymd}</td></tr>
+      <tr><th>Hour</th><td>${String(block.hour).padStart(2, "0")}:00</td></tr>
+      <tr><th>Risk</th><td>${riskStr}</td></tr>
+      ${block.windTxt ? `<tr><th>Wind Hazard</th><td>${block.windTxt}</td></tr>` : ""}
+      ${(block.windKts>0)?`<tr><th>Wind</th><td><b>${block.windKts.toFixed(0)} kts</b> (${block.windMPH.toFixed(0)} mph)${block.windDir?` from ${block.windDir}`:""}</td></tr>`:""}
+      <tr><th>Short Forecast</th><td>${block.shortF || "No data"}</td></tr>
+      ${block.detailedF ? `<tr><th>Detailed Forecast</th><td>${block.detailedF}</td></tr>` : ""}
+    </table>
     ${runwayStatusHTML}
-    <div style="margin-top:12px; color:#777; font-size:.92rem;">
+    <div style="margin-top:14px; color:#777; font-size:.95rem;">
       <em>“No Weather Risk” means no thunderstorms or weather hazards in the forecast. Does <u>not</u> guarantee VFR or IFR flight conditions.</em>
     </div>
   `;
