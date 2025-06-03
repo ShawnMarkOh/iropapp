@@ -197,32 +197,60 @@ def get_faa_events_by_day(dt):
     return events
 
 def get_events_for_hub_day(hub_iata, local_dt, tz_str):
-    """Return a list of events for this hub on this day, with Zulu to local hour conversion."""
     utc_dt = local_dt.astimezone(pytz.utc)
     events = get_faa_events_by_day(utc_dt.date())
     result = []
+    after_events = []
     for e in events:
         if e["iata"] != hub_iata:
             continue
         z_hour = int(e["zulu_time"][:2])
         z_min = int(e["zulu_time"][2:])
-        # The event day is always "today" in Zulu. We must convert to local (may change local day/hours).
-        # Compose a UTC datetime with today's date, that hour/minute, then convert to local
         dt_utc = datetime(utc_dt.year, utc_dt.month, utc_dt.day, z_hour, z_min, tzinfo=pytz.utc)
         dt_local = dt_utc.astimezone(pytz.timezone(tz_str))
-        result.append({
-            "local_hour": dt_local.hour,
-            "local_minute": dt_local.minute,
-            "local_time_str": dt_local.strftime("%H:%M"),
-            "z_hour": z_hour,
-            "z_minute": z_min,
-            "desc": e["desc"],
-            "zulu_time": e["zulu_time"],
-            "when": e["when"],
-            "when_type": e["when_type"],
-            "local_time_iso": dt_local.isoformat(),
-        })
+        if e["when_type"] == "AFTER":
+            # Mark for all hours AFTER this local hour (inclusive or exclusive? FAA: exclusive, so start at +1)
+            after_events.append({
+                "from_hour": dt_local.hour,
+                "from_minute": dt_local.minute,
+                "desc": e["desc"],
+                "zulu_time": e["zulu_time"],
+                "when": e["when"],
+                "when_type": e["when_type"],
+                "local_time_iso": dt_local.isoformat(),
+            })
+        else:
+            # UNTIL event (just the target hour)
+            result.append({
+                "local_hour": dt_local.hour,
+                "local_minute": dt_local.minute,
+                "local_time_str": dt_local.strftime("%H:%M"),
+                "z_hour": z_hour,
+                "z_minute": z_min,
+                "desc": e["desc"],
+                "zulu_time": e["zulu_time"],
+                "when": e["when"],
+                "when_type": e["when_type"],
+                "local_time_iso": dt_local.isoformat(),
+            })
+    # Now expand AFTER events for each hour after that time
+    for ae in after_events:
+        # Get local date from the event time (should match local_dt)
+        for hr in range(ae["from_hour"]+1, 24):
+            result.append({
+                "local_hour": hr,
+                "local_minute": 0,
+                "local_time_str": f"{hr:02d}:00",
+                "z_hour": None,
+                "z_minute": None,
+                "desc": ae["desc"],
+                "zulu_time": ae["zulu_time"],
+                "when": ae["when"],
+                "when_type": ae["when_type"],
+                "local_time_iso": "",  # Not needed for per-hour
+            })
     return result
+
 
 def fetch_and_log_weather(iata):
     grid = get_nws_grid(iata)
@@ -302,59 +330,43 @@ def hubs_api():
 def weather_api(iata):
     iata = iata.upper()
     now = datetime.now()
-    today_str = now.strftime("%Y-%m-%d")
     hub = next((h for h in HUBS if h["iata"] == iata), None)
     if not hub:
         return jsonify({"error": "Unknown IATA code"}), 404
+
     tz = pytz.timezone(hub["tz"])
     local_now = now.astimezone(tz)
     local_today_str = local_now.strftime("%Y-%m-%d")
     daily_log = load_daily_log()
 
-    if daily_log.get("date") == local_today_str and iata in daily_log.get("hubs", {}):
-        log_entry = daily_log["hubs"][iata]
-        grid = get_nws_grid(iata)
-        resp_daily = requests.get(grid["forecast"], timeout=15)
-        resp_daily.raise_for_status()
-        daily_periods = resp_daily.json()["properties"]["periods"]
-        resp_hourly = requests.get(grid["forecastHourly"], timeout=15)
-        resp_hourly.raise_for_status()
-        hourly_periods = resp_hourly.json()["properties"]["periods"]
+    # Always fetch and merge the latest data
+    data = fetch_and_log_weather(iata)
+    if not data:
+        return jsonify({"error": "Failed to fetch weather data"}), 500
+
+    # Reload the log to get what was just saved
+    merged_log = load_daily_log()
+    if merged_log.get("date") == local_today_str and iata in merged_log.get("hubs", {}):
+        log_entry = merged_log["hubs"][iata]
         result_hourly = []
-        for period in hourly_periods:
+
+        for period in data["hourly"]:
             dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
             if dt.strftime("%Y-%m-%d") == local_today_str:
+                # Use saved data for any hour that has already passed, else use new forecast
                 found = next((h for h in log_entry["hourly"] if h["startTime"] == period["startTime"]), None)
                 result_hourly.append(found if found else period)
             else:
                 result_hourly.append(period)
-        # Add FAA events for this hub and date
-        faa_events = get_events_for_hub_day(iata, local_now, hub["tz"])
-        return jsonify({
-            "hourly": result_hourly,
-            "daily": daily_periods,
-            "timezone": grid["timezone"],
-            "faa_events": faa_events
-        })
 
-    data = fetch_and_log_weather(iata)
-    if data:
-        merged_log = load_daily_log()
-        if merged_log.get("date") == local_today_str and iata in merged_log.get("hubs", {}):
-            log_entry = merged_log["hubs"][iata]
-            tz = pytz.timezone(hub["tz"])
-            result_hourly = []
-            for period in data["hourly"]:
-                dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
-                if dt.strftime("%Y-%m-%d") == local_today_str:
-                    found = next((h for h in log_entry["hourly"] if h["startTime"] == period["startTime"]), None)
-                    result_hourly.append(found if found else period)
-                else:
-                    result_hourly.append(period)
-            data["hourly"] = result_hourly
-        faa_events = get_events_for_hub_day(iata, local_now, hub["tz"])
-        data["faa_events"] = faa_events
+        data["hourly"] = result_hourly
+
+    # Attach FAA events for display
+    faa_events = get_events_for_hub_day(iata, local_now, hub["tz"])
+    data["faa_events"] = faa_events
+
     return jsonify(data)
+
 
 @app.route("/api/groundstops")
 def groundstops_api():

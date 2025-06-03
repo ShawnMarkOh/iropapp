@@ -1,4 +1,3 @@
-
 let FAA_EVENTS = {};
 let groundstopHubs = {};
 const windDirs = {N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5, S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5};
@@ -30,7 +29,7 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   let rawRisks = [];
   for (let h = 0; h < 24; h++) {
     let period = hourData[h];
-    let riskObj, txt, shortF="", detailedF="", windRisk=null, windTxt="", spdKts=0, spdMPH=0, dir="";
+    let riskObj, txt, shortF="", detailedF="", windRisk=null, windTxt="", spdKts=0, spdMPH=0, dir="", temp="";
     let runwayStatus = [];
     let faaEvent = faaEventsIndexed[h] || [];
     if (period) {
@@ -43,6 +42,10 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
         spdMPH = windToMPH(period.windSpeed);
       }
       if (period.windDirection) dir = period.windDirection;
+      // Add temperature for this hour if present
+      if (period.temperature !== undefined && period.temperatureUnit) {
+        temp = `${period.temperature}°${period.temperatureUnit}`;
+      }
       let windRiskObj = getHourWindRisk(spdKts, 0);
       runwayStatus = analyzeRunwaySafety(runways, dir, spdKts);
       let crossMax = Math.max(...runwayStatus.map(rw=>rw.cross));
@@ -63,7 +66,7 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       }
     } else {
       riskObj = { risk: "nodata", key: null, hourClass: "hour-nodata" };
-      txt = "No data"; shortF = ""; detailedF = "";
+      txt = "No data"; shortF = ""; detailedF = ""; temp = "";
     }
     rawRisks.push(riskObj.risk);
     hourBlocks.push({
@@ -80,7 +83,8 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       windRisk, windTxt, windDir: dir, windKts: spdKts, windMPH: spdMPH,
       runways: runwayStatus,
       isBrief: false,
-      faaEvents: faaEvent
+      faaEvents: faaEvent,
+      temp: temp
     });
   }
   let countHigh = 0, countPartial = 0, total = 0;
@@ -242,9 +246,10 @@ function renderBaseCard(card) {
     <div class="hourly-breakdown mb-1">
       <span class="hourly-label">24h risk:</span>
       ${card.hourBlocks.map(h =>
-        `<span class="hour-cell ${h.hourClass}" title="${h.hour}:00 - ${h.txt.replace(/"/g,"&quot;")}${h.windTxt ? " | "+h.windTxt : ""}${h.windKts>0?` | Wind: ${h.windKts.toFixed(0)}kts (${h.windMPH.toFixed(0)}mph)`:""}"
-        onclick='${h.risk==="nodata" ? "" : `showHourModal(${JSON.stringify(h).replace(/'/g,"&#39;")},${JSON.stringify(card.hub).replace(/'/g,"&#39;")},${JSON.stringify(card.label).replace(/'/g,"&#39;")})`}'
-        >${String(h.hour).padStart(2,0)}:00${h.faaEvents && h.faaEvents.length ? ' <span class="faa-event-mark" title="FAA Event for this hour">❗</span>' : ""}</span>`
+        `<span class="hour-cell ${h.hourClass}" 
+          title="${h.hour}:00 - ${h.txt.replace(/"/g,"&quot;")}${h.temp ? ', ' + h.temp : ''}${h.windTxt ? ' | ' + h.windTxt : ''}${h.windKts>0?` | Wind: ${h.windKts.toFixed(0)}kts (${h.windMPH.toFixed(0)}mph)`:""}"
+          onclick='${h.risk==="nodata" ? "" : `showHourModal(${JSON.stringify(h).replace(/'/g,"&#39;")},${JSON.stringify(card.hub).replace(/'/g,"&#39;")},${JSON.stringify(card.label).replace(/'/g,"&#39;")})`}'
+        >${String(h.hour).padStart(2,0)}:00${h.faaEvents && h.faaEvents.length ? ' <span class="faa-event-mark" title="FAA Event for this hour">' + '❗'.repeat(h.faaEvents.length) + '</span>' : ""}</span>`
       ).join("")}
     </div>
   `;
@@ -286,27 +291,25 @@ function showHourModal(block, base, dayLabel) {
       </table>
     `;
   }
-  let faaEventsHTML = "";
-  if (block.faaEvents && block.faaEvents.length > 0) {
-    faaEventsHTML = block.faaEvents.map(ev =>
-      `<div class="faa-event-summary"><b>FAA Event:</b> ${ev.desc}<br>
-        <span style="color:#222;">
-        <b>Local Hour:</b> ${String(block.hour).padStart(2,"0")}:00<br>
-        <b>Zulu Time:</b> ${ev.zulu_time ? ev.zulu_time : "N/A"}<br>
-        <b>When:</b> ${ev.when || "N/A"}
-        </span>
-      </div>`
-    ).join("");
-  }
+  let faaEventsHTML = block.faaEvents && block.faaEvents.length > 0 ? block.faaEvents.map(ev =>
+    `<div class="faa-event-summary"><b>FAA Event:</b> ${ev.desc}<br>
+      <span style="color:#222;">
+      <b>Local Hour:</b> ${String(block.hour).padStart(2,"0")}:00<br>
+      <b>FAA Event Time (Zulu):</b> ${ev.zulu_time ? ev.zulu_time : "N/A"}<br>
+      <b>When:</b> ${ev.when || "N/A"}
+      </span>
+    </div>`
+  ).join("") : "";
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
     <table class="modal-table">
       <tr><th>Date</th><td>${block.ymd}</td></tr>
       <tr><th>Hour</th><td>${String(block.hour).padStart(2, "0")}:00</td></tr>
       <tr><th>Risk</th><td>${riskStr}</td></tr>
+      ${block.temp ? `<tr><th>Temperature</th><td>${block.temp}</td></tr>` : ""}
       ${block.windTxt ? `<tr><th>Wind Hazard</th><td>${block.windTxt}</td></tr>` : ""}
       ${(block.windKts>0)?`<tr><th>Wind</th><td><b>${block.windKts.toFixed(0)} kts</b> (${block.windMPH.toFixed(0)} mph)${block.windDir?` from ${block.windDir}`:""}</td></tr>`:""}
-      <tr><th>Short Forecast</th><td>${block.shortF || "No data"}</td></tr>
+      <tr><th>Short Forecast</th><td>${block.txt || "No data"}${block.temp ? ', ' + block.temp : ''}</td></tr>
       ${block.detailedF ? `<tr><th>Detailed Forecast</th><td>${block.detailedF}</td></tr>` : ""}
     </table>
     ${runwayStatusHTML}
