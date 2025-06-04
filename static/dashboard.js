@@ -131,7 +131,7 @@ function analyzeRunwaySafety(runways, windDir, windKts) {
         } else if (rw.len >= 5040) {
             // Only SAFE for CRJ700
             let safe = (windKts <= 50) && (cross <= 27);
-            status = safe ? "SAFE (CRJ700 only)" : (windKts > 50 ? "UNSAFE WIND (CRJ700 only)" : "UNSAFE CROSSWIND (CRJ700 only)");
+            status = safe ? "SAFE (CRJ700)" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
             className = safe ? "runway-crj700only" : "runway-unsafe";
         }
 
@@ -307,7 +307,6 @@ function showHourModal(block, base, dayLabel) {
   else if (block.riskClass === "wind") riskStr = `<span class="risk-wind">Wind risk</span>`;
   else riskStr = `<span class="risk-normal">No Weather Risk</span>`;
 
-  // Get any SIRs (runway closures) and terminal constraints for this modal
   let closedRunways = [];
   if (window.LATEST_SIRS && window.LATEST_SIRS.length) {
     closedRunways = window.LATEST_SIRS.map(s => s.runway.replace(/\s/g,'').toUpperCase());
@@ -317,11 +316,10 @@ function showHourModal(block, base, dayLabel) {
     terminalConstraints = window.LATEST_CONSTRAINTS;
   }
 
-  // Runway Status Table with CRJ900/CRJ700 logic
   let runwayStatusHTML = "";
   if (block.runways && block.runways.length > 0) {
     runwayStatusHTML = `
-      <table class="modal-table mt-2">
+      <table class="modal-table runway-table mt-2">
         <thead>
           <tr>
             <th>Runway</th>
@@ -334,19 +332,16 @@ function showHourModal(block, base, dayLabel) {
           ${block.runways.map(rw => {
             let rwName = rw.label.replace(/\s/g,'').toUpperCase();
             let isClosed = closedRunways.includes(rwName);
-            // Custom display for each runway length range
             let status = "";
             let className = "";
             if (isClosed) {
               status = "CLOSED";
               className = "runway-unsafe";
             } else if (rw.len >= 5360) {
-              // SAFE for both CRJ900/700
               status = rw.safe ? "SAFE" : (rw.warning ? rw.warning : "UNSAFE");
               className = rw.safe ? "runway-safe" : "runway-unsafe";
             } else if (rw.len >= 5040) {
-              // Only SAFE for CRJ700
-              status = rw.safe ? "SAFE (CRJ700 only)" : (rw.warning ? rw.warning.replace(/^SAFE/, "SAFE (CRJ700 only)").replace(/^UNSAFE/, "UNSAFE (CRJ700 only)") : "UNSAFE (CRJ700 only)");
+              status = rw.safe ? "SAFE (CRJ700)" : (rw.warning ? rw.warning.replace(/^SAFE/, "SAFE (CRJ700)").replace(/^UNSAFE/, "UNSAFE (CRJ700)") : "UNSAFE (CRJ700)");
               className = rw.safe ? "runway-crj700only" : "runway-unsafe";
             }
             return `<tr>
@@ -359,12 +354,11 @@ function showHourModal(block, base, dayLabel) {
         </tbody>
       </table>
       <div class="mt-2" style="font-size:0.97em;color:#506080;">
-        <b>Legend:</b> <span class="runway-safe">SAFE</span> = Meets CRJ900 &amp; CRJ700 requirements. <span class="runway-crj700only">SAFE (CRJ700 only)</span> = Only CRJ700, not CRJ900. <span class="runway-unsafe">CLOSED/UNSAFE</span> = Not available or unsafe.
+        <b>Legend:</b> <span class="runway-safe">SAFE</span> = Meets CRJ900 &amp; CRJ700 requirements. <span class="runway-crj700only">SAFE (CRJ700)</span> = Only CRJ700, not CRJ900. <span class="runway-unsafe">CLOSED/UNSAFE</span> = Not available or unsafe.
       </div>
     `;
   }
 
-  // FAA Events
   let faaEventsHTML = block.faaEvents && block.faaEvents.length > 0 ? block.faaEvents.map(ev =>
     `<div class="faa-event-summary"><b>FAA Event:</b> ${ev.desc}<br>
       <span style="color:#222;">
@@ -375,7 +369,6 @@ function showHourModal(block, base, dayLabel) {
     </div>`
   ).join("") : "";
 
-  // Terminal Constraints banner
   let constraintsHTML = "";
   if (terminalConstraints && terminalConstraints.length) {
     constraintsHTML = `
@@ -388,29 +381,39 @@ function showHourModal(block, base, dayLabel) {
     `;
   }
 
-  // Modal Main Table
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
-    ${constraintsHTML}
-    <table class="modal-table">
-      <tr><th>Date</th><td>${block.ymd}</td></tr>
-      <tr><th>Hour</th><td>${String(block.hour).padStart(2, "0")}:00</td></tr>
-      <tr><th>Risk</th><td>${riskStr}</td></tr>
-      ${block.temp ? `<tr><th>Temperature</th><td>${block.temp}</td></tr>` : ""}
-      ${block.windTxt ? `<tr><th>Wind Hazard</th><td>${block.windTxt}</td></tr>` : ""}
-      ${(block.windKts>0)?`<tr><th>Wind</th><td><b>${block.windKts.toFixed(0)} kts</b> (${block.windMPH.toFixed(0)} mph)${block.windDir?` from ${block.windDir}`:""}</td></tr>`:""}
-      <tr><th>Short Forecast</th><td>${block.txt || "No data"}${block.temp ? ', ' + block.temp : ''}</td></tr>
-      ${block.detailedF ? `<tr><th>Detailed Forecast</th><td>${block.detailedF}</td></tr>` : ""}
-    </table>
-    ${runwayStatusHTML}
-    ${faaEventsHTML}
+    <div class="modal-section">
+      <table class="modal-table">
+        <tr><th>Date</th><td>${block.ymd}</td></tr>
+        <tr><th>Hour</th><td>${String(block.hour).padStart(2, "0")}:00</td></tr>
+        <tr><th>Risk</th><td>${riskStr}</td></tr>
+        ${block.temp ? `<tr><th>Temperature</th><td>${block.temp}</td></tr>` : ""}
+        ${block.windTxt ? `<tr><th>Wind Hazard</th><td>${block.windTxt}</td></tr>` : ""}
+        ${(block.windKts>0)?`<tr><th>Wind</th><td><b>${block.windKts.toFixed(0)} kts</b> (${block.windMPH.toFixed(0)} mph)${block.windDir?` from ${block.windDir}`:""}</td></tr>`:""}
+        <tr><th>Short Forecast</th><td>${block.txt || "No data"}</td></tr>
+        ${block.detailedF ? `<tr><th>Detailed Forecast</th><td>${block.detailedF}</td></tr>` : ""}
+      </table>
+    </div>
+    <hr>
+    <div class="modal-section">
+      ${runwayStatusHTML}
+    </div>
+    <hr>
+    <div class="modal-section">
+      ${faaEventsHTML}
+      ${constraintsHTML}
+    </div>
     <div style="margin-top:14px; color:#777; font-size:.95rem;">
       <em>“No Weather Risk” means no thunderstorms or weather hazards in the forecast. Does <u>not</u> guarantee VFR or IFR flight conditions.</em>
     </div>
   `;
+
   let modal = new bootstrap.Modal(document.getElementById('hourModal'));
   modal.show();
 }
+
+
 
 
 function scheduleHourlyRefresh() {

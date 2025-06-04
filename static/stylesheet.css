@@ -27,21 +27,90 @@ body {background: #f3f6fa; color: #232323; min-height: 100vh;}
 .hourly-label {font-size: 0.96rem; color: #656565; font-weight: 600; min-width: 80px; margin-right: 7px; margin-bottom: 2px; display: inline-block;}
 .runway-safe { color: #178a2c; font-weight: 600;}
 .runway-unsafe { color: #c4171d; font-weight: 600;}
-.modal-table th { font-weight: 600; background: #f5f6fa; border-bottom: 1px solid #dee2e6;}
-.modal-table td, .modal-table th { padding: 4px 8px; font-size: 1.01rem;}
-.modal-table { width: 100%; margin-top: 8px; border-collapse: collapse; }
-.modal-table tr:not(:last-child) td { border-bottom: 1px solid #f0f0f0;}
+.runway-crj700only { color: #17446b; background: #fff3cd; border-radius: 6px; padding: 2px 8px; font-weight: 600; font-size: 1em; }
 .footer {margin: 36px auto 26px auto; max-width:1200px; text-align:center; color:#6a788a; font-size:1rem;}
 .modal-header {background: #f3f6fa;}
 .faa-event-mark {color:#c20019; font-size:1.33em; font-weight:bold; margin-left: 2px; vertical-align:middle;}
 .faa-event-summary {background:#faeaea;color:#c20019;border-left:4px solid #c20019;padding:6px 10px;margin:10px 0 0 0;font-size:.99rem;border-radius:7px;}
 @media (max-width: 992px) {#briefing-summary { font-size:1rem; } .day-header { font-size:1.16rem; }}
 @media (max-width: 600px) {#briefing-summary { padding: 10px 4vw; }}
-.runway-crj700only {
-    color: #17446b;
-    background: #fff3cd;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-weight: 600;
-    font-size: 1em;
+
+/* Modal layout improvements */
+.modal-dialog { max-width: 650px; min-width: 420px; }
+@media (max-width: 700px) {
+  .modal-dialog { max-width: 98vw !important; min-width: 0; }
 }
+.modal-section { margin-bottom: 10px; }
+hr { margin: 14px 0 12px 0; border: 0; border-top: 1.5px solid #e4e7ed; }
+
+/* Enhanced modal table alignment for info rows */
+.modal-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+.modal-table th, .modal-table td {
+  font-size: 1.06rem;
+  padding: 6px 10px 6px 0;
+  text-align: left;
+  vertical-align: top;
+  background: none;
+  border: none;
+}
+.modal-table th {
+  width: 132px;
+  font-weight: 600;
+  color: #213f75;
+  letter-spacing: .03em;
+  text-align: right;
+  padding-right: 18px;
+  padding-left: 0;
+  white-space: nowrap;
+  background: none;
+}
+.modal-table tr {
+  border-bottom: none;
+}
+.modal-table tr:not(:last-child) td {
+  border-bottom: 1px solid #f1f1f1;
+}
+@media (max-width: 700px) {
+  .modal-table th { font-size: 1rem; width: 90px; padding-right: 10px; }
+  .modal-table td { font-size: 1rem; }
+}
+
+/* Enhanced modal runway table column alignment */
+.modal-table.runway-table {
+  table-layout: fixed;
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: separate;
+  border-spacing: 0 2px;
+}
+
+.modal-table.runway-table th,
+.modal-table.runway-table td {
+  font-size: 1.06rem;
+  padding: 6px 4px 6px 0;
+  text-align: left;
+  vertical-align: top;
+  background: none;
+  border: none;
+}
+
+.modal-table.runway-table th {
+  font-weight: 600;
+  color: #213f75;
+  background: none;
+  text-align: left;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
+.modal-table.runway-table th:nth-child(1), .modal-table.runway-table td:nth-child(1) { width: 28%; }
+.modal-table.runway-table th:nth-child(2), .modal-table.runway-table td:nth-child(2) { width: 23%; }
+.modal-table.runway-table th:nth-child(3), .modal-table.runway-table td:nth-child(3) { width: 23%; }
+.modal-table.runway-table th:nth-child(4), .modal-table.runway-table td:nth-child(4) { width: 26%; }
