@@ -42,7 +42,6 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
         spdMPH = windToMPH(period.windSpeed);
       }
       if (period.windDirection) dir = period.windDirection;
-      // Add temperature for this hour if present
       if (period.temperature !== undefined && period.temperatureUnit) {
         temp = `${period.temperature}°${period.temperatureUnit}`;
       }
@@ -115,6 +114,41 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   }
   return {hourBlocks,percentHigh: total ? Math.round((countHigh/total)*100) : 0,percentPartial: total ? Math.round((countPartial/total)*100) : 0,total};
 }
+function analyzeRunwaySafety(runways, windDir, windKts) {
+    let runwayResults = [];
+    for (let rw of runways) {
+        if (rw.len < 5040) continue;  // Only show runways long enough for CRJ700
+
+        let cross = crosswindComponent(rw.heading, windDir, windKts);
+        let status = "";
+        let className = "";
+
+        if (rw.len >= 5360) {
+            // SAFE for both CRJ900 and CRJ700
+            let safe = (windKts <= 50) && (cross <= 27);
+            status = safe ? "SAFE" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
+            className = safe ? "runway-safe" : "runway-unsafe";
+        } else if (rw.len >= 5040) {
+            // Only SAFE for CRJ700
+            let safe = (windKts <= 50) && (cross <= 27);
+            status = safe ? "SAFE (CRJ700 only)" : (windKts > 50 ? "UNSAFE WIND (CRJ700 only)" : "UNSAFE CROSSWIND (CRJ700 only)");
+            className = safe ? "runway-crj700only" : "runway-unsafe";
+        }
+
+        // Add to display if meets either threshold
+        if (rw.len >= 5040) {
+            runwayResults.push({
+                label: rw.label,
+                cross: Math.round(cross),
+                safe: status.startsWith("SAFE"),
+                warning: status,
+                len: rw.len,
+                className: className
+            });
+        }
+    }
+    return runwayResults;
+}
 function getHourRisk(forecast) {if (!forecast) return {risk:"clear", key:null, hourClass: "hour-clear"};let forecastL = forecast.toLowerCase();if (/thunderstorms likely|severe thunderstorm|severe t[- ]?storm|tstm likely|t\.storm likely|t[- ]?storm likely/.test(forecastL)) {return { risk: "high", key: "Thunder", hourClass: "hour-thunder" };}if (/thunderstorm|tstm|t-storm|t\.storm/.test(forecastL)) {if (/slight chance|chance/.test(forecastL)) {return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}if (/severe|tornado|hail|damaging wind|squall|snow|blizzard|ice|sleet|wintry|freezing rain|freezing drizzle/.test(forecastL)) {return { risk: "high", key: "Severe", hourClass: "hour-severe" };}if (/heavy rain|flood|downpour|fog|low visibility|low clouds/.test(forecastL)) {return { risk: "partial", key: null, hourClass: "hour-other" };}return { risk: "clear", key: null, hourClass: "hour-clear" };}
 function formatLocalDateOnly(dtIso, tz) {try {const d = new Date(dtIso);return new Intl.DateTimeFormat('en-US', {weekday: "short", month: "short", day: "numeric", year: "numeric",timeZone: tz}).format(d);} catch { return dtIso; }}
 function getDailyAssessment(percentHigh, percentPartial) {if (percentHigh >= 30) return { label: "⚠️ High IROPS Risk", class: "risk-high", summary: "High IROPS risk" };if (percentHigh >= 10 || percentPartial >= 30) return { label: "⛅ Partial IROPS Risk", class: "risk-partial", summary: "Partial IROPS risk" };if (percentPartial >= 10) return { label: "⛅ Slight IROPS Risk", class: "risk-partial", summary: "Slight IROPS risk" };return { label: "✔️ No Weather Risk", class: "risk-normal", summary: "No Weather Risk" };}
@@ -128,6 +162,11 @@ async function loadDashboard() {
   for (const hub of HUBS) {
     try {
       const wx = await fetchWeather(hub.iata);
+
+      // Store SIRs and terminal constraints globally for modal use
+      window.LATEST_SIRS = wx.sirs || [];
+      window.LATEST_CONSTRAINTS = wx.terminal_constraints || [];
+
       FAA_EVENTS[hub.iata] = wx.faa_events || [];
       const nowLocal = new Date(new Date().toLocaleString("en-US", {timeZone: hub.tz}));
       const todayYMD = nowLocal.getFullYear() + "-" + String(nowLocal.getMonth()+1).padStart(2, "0") + "-" + String(nowLocal.getDate()).padStart(2, "0");
@@ -254,6 +293,7 @@ function renderBaseCard(card) {
     </div>
   `;
 }
+
 function showHourModal(block, base, dayLabel) {
   const modalLabel = document.getElementById('hourModalLabel');
   const modalBody = document.getElementById('hourModalBody');
@@ -266,6 +306,18 @@ function showHourModal(block, base, dayLabel) {
   else if (block.riskClass === "nodata") riskStr = `<span class="hour-nodata">No data</span>`;
   else if (block.riskClass === "wind") riskStr = `<span class="risk-wind">Wind risk</span>`;
   else riskStr = `<span class="risk-normal">No Weather Risk</span>`;
+
+  // Get any SIRs (runway closures) and terminal constraints for this modal
+  let closedRunways = [];
+  if (window.LATEST_SIRS && window.LATEST_SIRS.length) {
+    closedRunways = window.LATEST_SIRS.map(s => s.runway.replace(/\s/g,'').toUpperCase());
+  }
+  let terminalConstraints = [];
+  if (window.LATEST_CONSTRAINTS && window.LATEST_CONSTRAINTS.length) {
+    terminalConstraints = window.LATEST_CONSTRAINTS;
+  }
+
+  // Runway Status Table with CRJ900/CRJ700 logic
   let runwayStatusHTML = "";
   if (block.runways && block.runways.length > 0) {
     runwayStatusHTML = `
@@ -279,18 +331,40 @@ function showHourModal(block, base, dayLabel) {
           </tr>
         </thead>
         <tbody>
-          ${block.runways.map(rw =>
-            `<tr>
-              <td>${rw.label}</td>
-              <td>${rw.len}</td>
-              <td>${rw.cross}</td>
-              <td><span class="${rw.safe ? "runway-safe" : "runway-unsafe"}">${rw.safe ? "SAFE" : rw.warning}</span></td>
-            </tr>`
-          ).join("")}
+          ${block.runways.map(rw => {
+            let rwName = rw.label.replace(/\s/g,'').toUpperCase();
+            let isClosed = closedRunways.includes(rwName);
+            // Custom display for each runway length range
+            let status = "";
+            let className = "";
+            if (isClosed) {
+              status = "CLOSED";
+              className = "runway-unsafe";
+            } else if (rw.len >= 5360) {
+              // SAFE for both CRJ900/700
+              status = rw.safe ? "SAFE" : (rw.warning ? rw.warning : "UNSAFE");
+              className = rw.safe ? "runway-safe" : "runway-unsafe";
+            } else if (rw.len >= 5040) {
+              // Only SAFE for CRJ700
+              status = rw.safe ? "SAFE (CRJ700 only)" : (rw.warning ? rw.warning.replace(/^SAFE/, "SAFE (CRJ700 only)").replace(/^UNSAFE/, "UNSAFE (CRJ700 only)") : "UNSAFE (CRJ700 only)");
+              className = rw.safe ? "runway-crj700only" : "runway-unsafe";
+            }
+            return `<tr>
+                <td>${rw.label}</td>
+                <td>${rw.len}</td>
+                <td>${rw.cross}</td>
+                <td><span class="${className}">${status}</span></td>
+              </tr>`;
+          }).join("")}
         </tbody>
       </table>
+      <div class="mt-2" style="font-size:0.97em;color:#506080;">
+        <b>Legend:</b> <span class="runway-safe">SAFE</span> = Meets CRJ900 &amp; CRJ700 requirements. <span class="runway-crj700only">SAFE (CRJ700 only)</span> = Only CRJ700, not CRJ900. <span class="runway-unsafe">CLOSED/UNSAFE</span> = Not available or unsafe.
+      </div>
     `;
   }
+
+  // FAA Events
   let faaEventsHTML = block.faaEvents && block.faaEvents.length > 0 ? block.faaEvents.map(ev =>
     `<div class="faa-event-summary"><b>FAA Event:</b> ${ev.desc}<br>
       <span style="color:#222;">
@@ -300,8 +374,24 @@ function showHourModal(block, base, dayLabel) {
       </span>
     </div>`
   ).join("") : "";
+
+  // Terminal Constraints banner
+  let constraintsHTML = "";
+  if (terminalConstraints && terminalConstraints.length) {
+    constraintsHTML = `
+      <div class="faa-event-summary" style="background:#cbe7f8;color:#204060;border-left:4px solid #2274c7;margin-bottom:6px;">
+        <b>Terminal Constraints:</b><br>
+        <ul style="margin:0 0 0 12px;padding:0;">
+          ${terminalConstraints.map(c => `<li>${c}</li>`).join("")}
+        </ul>
+      </div>
+    `;
+  }
+
+  // Modal Main Table
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
+    ${constraintsHTML}
     <table class="modal-table">
       <tr><th>Date</th><td>${block.ymd}</td></tr>
       <tr><th>Hour</th><td>${String(block.hour).padStart(2, "0")}:00</td></tr>
@@ -321,11 +411,18 @@ function showHourModal(block, base, dayLabel) {
   let modal = new bootstrap.Modal(document.getElementById('hourModal'));
   modal.show();
 }
+
+
 function scheduleHourlyRefresh() {
   const now = new Date();
   const msToNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
   setTimeout(function() { window.location.reload(); }, msToNextHour + 1000);
 }
+// Optional: also refresh every 10 minutes for live data
+setInterval(function() {
+    window.location.reload();
+}, 600000);
+
 document.addEventListener('DOMContentLoaded', async ()=>{
   HUBS = await getHubs();
   const groundstops = await fetchGroundStops();
@@ -342,7 +439,3 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   loadDashboard();
   scheduleHourlyRefresh();
 });
-// Refresh the page and make fresh API calls every 10 minutes (600,000 ms)
-setInterval(function() {
-    window.location.reload();
-}, 600000); // 600000 ms = 10 minutes

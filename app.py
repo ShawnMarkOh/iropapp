@@ -45,6 +45,7 @@ HUBS = [
         "tz": "America/New_York",
         "runways": [
             {"label": "1/19",    "heading": 10,  "len": 7169},
+            {"label": "15/33",   "heading": 150, "len": 5204},   # Included, CRJ700 only
         ]
     },
     {
@@ -66,14 +67,15 @@ HUBS = [
         "runways": [
             {"label": "13L/31R", "heading": 130, "len": 9000},
             {"label": "13R/31L", "heading": 130, "len": 9200},
-            {"label": "17C/35C", "heading": 170, "len": 13400},
             {"label": "17L/35R", "heading": 170, "len": 8500},
+            {"label": "17C/35C", "heading": 170, "len": 13400},
             {"label": "17R/35L", "heading": 170, "len": 13400},
             {"label": "18L/36R", "heading": 180, "len": 13300},
             {"label": "18R/36L", "heading": 180, "len": 13400},
         ]
     }
 ]
+
 
 FAA_ADVZY_URL = "https://www.fly.faa.gov/adv/adv_otherdis.jsp"
 
@@ -325,7 +327,108 @@ def dashboard():
 @app.route("/api/hubs")
 def hubs_api():
     return jsonify(HUBS)
+def parse_faa_sirs(text, hubs_iata, now_dt):
+    """
+    Parse RUNWAY/EQUIPMENT/POSSIBLE SYSTEM IMPACT REPORTS (SIRs):
+    For each hub, list any closed runways with their closure windows.
+    """
+    sirs_section = re.search(r'RUNWAY/EQUIPMENT/POSSIBLE SYSTEM IMPACT REPORTS \(SIRs\):(.*?)(\n\n|\r\n\r\n|$)', text, re.DOTALL)
+    if not sirs_section:
+        return []
+    sirs_text = sirs_section.group(1)
+    # Ex: DEN - RWY 17R/35L CLOSED UNTIL 06/24/25 2300Z
+    #     PHL - RWY 09R/27L NIGHTLY CLOSURES UNTIL 09/17/25 1000Z
+    sirs = []
+    for line in sirs_text.splitlines():
+        m = re.match(r'\s*([A-Z]{3})\s*-\s*(RWY\s*\d+[LRC]?/\d+[LRC]?)\s*(.*?)(CLOSED|CLOSURE).*UNTIL\s+(\d{2}/\d{2}/\d{2}(?:\s+\d{4}Z)?)', line, re.IGNORECASE)
+        if m:
+            iata = m.group(1)
+            runway = m.group(2).replace("RWY ", "").strip()
+            status = m.group(4).upper()
+            until = m.group(5)
+            # Parse until datetime
+            until_dt = None
+            until_parts = re.match(r'(\d{2})/(\d{2})/(\d{2})(?:\s+(\d{4})Z)?', until)
+            if until_parts:
+                mm, dd, yy, zulu = until_parts.groups()
+                year = int(yy)
+                if year < 100: year += 2000
+                month = int(mm)
+                day = int(dd)
+                if zulu:
+                    hour = int(zulu[:2])
+                    minute = int(zulu[2:])
+                else:
+                    hour = 23
+                    minute = 59
+                until_dt = datetime(year, month, day, hour, minute, tzinfo=pytz.utc)
+            sirs.append({
+                "iata": iata,
+                "runway": runway,
+                "status": status,
+                "until_dt": until_dt.isoformat() if until_dt else None,
+                "until": until
+            })
+    # For hubs, return only matching runways that are closed and still within closure window
+    relevant = []
+    for s in sirs:
+        if s["iata"] in hubs_iata and s["status"] == "CLOSED":
+            if not s["until_dt"]:
+                relevant.append(s)
+            else:
+                # Still in effect?
+                until = datetime.fromisoformat(s["until_dt"])
+                if now_dt < until:
+                    relevant.append(s)
+    return relevant
 
+def parse_terminal_constraints(text, hubs_iata):
+    # Extract TERMINAL CONSTRAINTS: ... section
+    constraints_section = re.search(r'TERMINAL CONSTRAINTS:(.*?)(\n\n|\r\n\r\n|$)', text, re.DOTALL)
+    if not constraints_section:
+        return []
+    constraints_text = constraints_section.group(1)
+    results = []
+    for line in constraints_text.splitlines():
+        m = re.match(r'\s*([A-Z]{3})\s*-\s*(.*)', line)
+        if m:
+            iata = m.group(1)
+            if iata in hubs_iata:
+                desc = m.group(2).strip()
+                results.append({
+                    "iata": iata,
+                    "desc": desc
+                })
+    return results
+
+# Download and process acronyms (once at startup, or cache as needed)
+import requests
+ACRONYM_GLOSSARY = {}
+
+def load_acronym_glossary():
+    url = "https://www.fly.faa.gov/FAQ/Acronyms/acronyms.jsp"
+    try:
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        glossary = {}
+        # The page is an HTML table; parse it
+        for row in re.findall(r'<tr>\s*<td.*?>(.*?)</td>\s*<td.*?>(.*?)</td>', resp.text, re.DOTALL):
+            key, meaning = row
+            key = re.sub(r'<.*?>', '', key).strip()
+            meaning = re.sub(r'<.*?>', '', meaning).strip()
+            glossary[key.upper()] = meaning
+        return glossary
+    except Exception as ex:
+        return {}
+ACRONYM_GLOSSARY = load_acronym_glossary()
+
+def expand_acronyms(text):
+    # For each known acronym, replace with its full meaning (simple version)
+    def repl(match):
+        acronym = match.group(0)
+        return f"{acronym} ({ACRONYM_GLOSSARY.get(acronym, '')})" if acronym in ACRONYM_GLOSSARY else acronym
+    return re.sub(r'\b[A-Z]{2,}\b', repl, text)
+    
 @app.route("/api/weather/<iata>")
 def weather_api(iata):
     iata = iata.upper()
@@ -333,39 +436,44 @@ def weather_api(iata):
     hub = next((h for h in HUBS if h["iata"] == iata), None)
     if not hub:
         return jsonify({"error": "Unknown IATA code"}), 404
-
     tz = pytz.timezone(hub["tz"])
     local_now = now.astimezone(tz)
     local_today_str = local_now.strftime("%Y-%m-%d")
     daily_log = load_daily_log()
 
-    # Always fetch and merge the latest data
     data = fetch_and_log_weather(iata)
     if not data:
         return jsonify({"error": "Failed to fetch weather data"}), 500
 
     # Reload the log to get what was just saved
     merged_log = load_daily_log()
+    result_hourly = []
+
     if merged_log.get("date") == local_today_str and iata in merged_log.get("hubs", {}):
         log_entry = merged_log["hubs"][iata]
-        result_hourly = []
-
+        log_hours_by_start = {h["startTime"]: h for h in log_entry.get("hourly", [])}
         for period in data["hourly"]:
             dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
-            if dt.strftime("%Y-%m-%d") == local_today_str:
-                # Use saved data for any hour that has already passed, else use new forecast
-                found = next((h for h in log_entry["hourly"] if h["startTime"] == period["startTime"]), None)
-                result_hourly.append(found if found else period)
+            is_past = dt <= local_now  # mark hour as 'past' if <= now
+            key = period["startTime"]
+            # For past hours, use log value if available
+            if is_past and key in log_hours_by_start:
+                result_hourly.append(log_hours_by_start[key])
             else:
                 result_hourly.append(period)
-
         data["hourly"] = result_hourly
 
-    # Attach FAA events for display
+    # Always safe, never KeyError:
+    data["sirs"] = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
+    data["terminal_constraints"] = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
+
+    # FAA events as before
     faa_events = get_events_for_hub_day(iata, local_now, hub["tz"])
     data["faa_events"] = faa_events
 
     return jsonify(data)
+
+
 
 
 @app.route("/api/groundstops")

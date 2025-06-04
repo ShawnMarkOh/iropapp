@@ -37,3 +37,11 @@ body {background: #f3f6fa; color: #232323; min-height: 100vh;}
 .faa-event-summary {background:#faeaea;color:#c20019;border-left:4px solid #c20019;padding:6px 10px;margin:10px 0 0 0;font-size:.99rem;border-radius:7px;}
 @media (max-width: 992px) {#briefing-summary { font-size:1rem; } .day-header { font-size:1.16rem; }}
 @media (max-width: 600px) {#briefing-summary { padding: 10px 4vw; }}
+.runway-crj700only {
+    color: #17446b;
+    background: #fff3cd;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-weight: 600;
+    font-size: 1em;
+}
