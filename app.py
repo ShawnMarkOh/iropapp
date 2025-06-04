@@ -184,6 +184,7 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
     events = get_faa_events_by_day(utc_dt.date())
     result = []
     after_events = []
+    until_events = []
     for e in events:
         if e["iata"] != hub_iata:
             continue
@@ -201,7 +202,18 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "when_type": e["when_type"],
                 "local_time_iso": dt_local.isoformat(),
             })
+        elif e["when_type"] == "UNTIL":
+            until_events.append({
+                "to_hour": dt_local.hour,
+                "to_minute": dt_local.minute,
+                "desc": e["desc"],
+                "zulu_time": e["zulu_time"],
+                "when": e["when"],
+                "when_type": e["when_type"],
+                "local_time_iso": dt_local.isoformat(),
+            })
         else:
+            # fallback, treat as single hour
             result.append({
                 "local_hour": dt_local.hour,
                 "local_minute": dt_local.minute,
@@ -214,8 +226,9 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "when_type": e["when_type"],
                 "local_time_iso": dt_local.isoformat(),
             })
+    # Assign AFTER events to all hours after the trigger hour
     for ae in after_events:
-        for hr in range(ae["from_hour"]+1, 24):
+        for hr in range(ae["from_hour"] + 1, 24):
             result.append({
                 "local_hour": hr,
                 "local_minute": 0,
@@ -228,7 +241,23 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "when_type": ae["when_type"],
                 "local_time_iso": "",
             })
+    # Assign UNTIL events to all hours up to and including the to_hour
+    for ue in until_events:
+        for hr in range(0, ue["to_hour"] + 1):
+            result.append({
+                "local_hour": hr,
+                "local_minute": 0,
+                "local_time_str": f"{hr:02d}:00",
+                "z_hour": None,
+                "z_minute": None,
+                "desc": ue["desc"],
+                "zulu_time": ue["zulu_time"],
+                "when": ue["when"],
+                "when_type": ue["when_type"],
+                "local_time_iso": "",
+            })
     return result
+
 
 def fetch_and_log_weather(iata):
     grid = get_nws_grid(iata)
