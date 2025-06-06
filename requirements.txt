@@ -4,3 +4,4 @@ gunicorn
 requests
 pytz
 beautifulsoup4
+flask_sqlalchemy

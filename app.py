@@ -1,19 +1,41 @@
 import os
 import re
 import json
-from flask import Flask, jsonify, render_template, send_from_directory
+from flask import Flask, jsonify, render_template, send_from_directory, request
 from flask_cors import CORS
 import requests
 from datetime import datetime, timedelta
 import pytz
 import threading
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 CORS(app)
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-LOG_FILE = os.path.join(DATA_DIR, "daily.log.json")
 os.makedirs(DATA_DIR, exist_ok=True)
+LOG_FILE = os.path.join(DATA_DIR, "daily.log.json")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(DATA_DIR, "weatherlog.db")}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+class HourlyWeather(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    iata = db.Column(db.String(4), index=True, nullable=False)
+    start_time = db.Column(db.String(40), index=True, nullable=False)
+    data_json = db.Column(db.Text, nullable=False)
+    date = db.Column(db.String(10), index=True, nullable=False)
+
+    def as_dict(self):
+        return {
+            "iata": self.iata,
+            "startTime": self.start_time,
+            **json.loads(self.data_json)
+        }
+
+with app.app_context():
+    db.create_all()
 
 HUBS = [
     {
@@ -124,7 +146,6 @@ def get_latlon_for_hub(iata):
     return lookup.get(iata, (None, None))
 
 def get_latest_ops_plan_json():
-    """Fetch the current FAA Operations Plan from the official API."""
     now = datetime.utcnow()
     cache = FAA_OPS_PLAN_URL_CACHE
     if cache.get("json") and cache.get("time") and (now - cache["time"]).total_seconds() < 600:
@@ -145,7 +166,6 @@ def get_latest_ops_plan_json():
     return None
 
 def parse_faa_ops_plan_json(data):
-    """Convert terminal planned FAA events to a standard format for the dashboard."""
     if not data or "terminalPlanned" not in data:
         print("No terminal planned data in FAA OPS PLAN JSON.")
         return []
@@ -213,7 +233,6 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "local_time_iso": dt_local.isoformat(),
             })
         else:
-            # fallback, treat as single hour
             result.append({
                 "local_hour": dt_local.hour,
                 "local_minute": dt_local.minute,
@@ -226,7 +245,6 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "when_type": e["when_type"],
                 "local_time_iso": dt_local.isoformat(),
             })
-    # Assign AFTER events to all hours after the trigger hour
     for ae in after_events:
         for hr in range(ae["from_hour"] + 1, 24):
             result.append({
@@ -241,7 +259,6 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "when_type": ae["when_type"],
                 "local_time_iso": "",
             })
-    # Assign UNTIL events to all hours up to and including the to_hour
     for ue in until_events:
         for hr in range(0, ue["to_hour"] + 1):
             result.append({
@@ -257,7 +274,6 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 "local_time_iso": "",
             })
     return result
-
 
 def fetch_and_log_weather(iata):
     grid = get_nws_grid(iata)
@@ -276,54 +292,36 @@ def fetch_and_log_weather(iata):
     now = datetime.now(pytz.timezone(grid["timezone"]))
     today_str = now.strftime("%Y-%m-%d")
 
-    daily_log = load_daily_log()
-    if "hubs" not in daily_log:
-        daily_log["hubs"] = {}
-    daily_log["date"] = today_str
-    if iata not in daily_log["hubs"]:
-        daily_log["hubs"][iata] = {
-            "hourly": [],
-            "last_updated": now.isoformat()
-        }
-
-    logged = daily_log["hubs"][iata]["hourly"]
-    logged_by_time = {}
-    for entry in logged:
-        try:
-            dt = datetime.fromisoformat(entry["startTime"].replace("Z", "+00:00")).astimezone(pytz.timezone(grid["timezone"]))
-            key = dt.replace(minute=0, second=0, microsecond=0).isoformat()
-            logged_by_time[key] = entry
-        except Exception:
-            continue
-
-    merged_hours = []
     for period in hourly_periods:
         dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(pytz.timezone(grid["timezone"]))
-        key = dt.replace(minute=0, second=0, microsecond=0).isoformat()
-        if dt.strftime("%Y-%m-%d") == today_str:
-            merged_hours.append(period)
-            logged_by_time[key] = period
-
-    merged_keys = set()
-    for period in merged_hours:
-        dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(pytz.timezone(grid["timezone"]))
-        key = dt.replace(minute=0, second=0, microsecond=0).isoformat()
-        merged_keys.add(key)
-    for key, entry in logged_by_time.items():
-        dt = datetime.fromisoformat(entry["startTime"].replace("Z", "+00:00")).astimezone(pytz.timezone(grid["timezone"]))
-        if key not in merged_keys and dt.strftime("%Y-%m-%d") == today_str:
-            merged_hours.append(entry)
-    merged_hours.sort(key=lambda x: x["startTime"])
-
-    daily_log["hubs"][iata]["hourly"] = merged_hours
-    daily_log["hubs"][iata]["last_updated"] = now.isoformat()
-    save_daily_log(daily_log)
+        ymd = dt.strftime("%Y-%m-%d")
+        key = period["startTime"]
+        exists = HourlyWeather.query.filter_by(iata=iata, start_time=key).first()
+        if not exists and ymd == today_str:
+            db.session.add(HourlyWeather(
+                iata=iata,
+                start_time=key,
+                data_json=json.dumps(period),
+                date=ymd
+            ))
+    db.session.commit()
 
     return {
         "hourly": hourly_periods,
         "daily": daily_periods,
         "timezone": grid["timezone"]
     }
+
+@app.route("/api/weather-archive/<iata>")
+def weather_archive_api(iata):
+    dates = db.session.query(HourlyWeather.date).filter_by(iata=iata.upper()).distinct().order_by(HourlyWeather.date.desc()).all()
+    return jsonify([d[0] for d in dates])
+
+@app.route("/api/weather-history/<iata>/<date>")
+def weather_history_api(iata, date):
+    hours = HourlyWeather.query.filter_by(iata=iata.upper(), date=date).order_by(HourlyWeather.start_time).all()
+    result = [h.as_dict() for h in hours]
+    return jsonify(result)
 
 @app.route("/")
 def dashboard():
@@ -337,39 +335,63 @@ def hubs_api():
 def weather_api(iata):
     iata = iata.upper()
     now = datetime.now()
+    req_date = request.args.get('date')
     hub = next((h for h in HUBS if h["iata"] == iata), None)
     if not hub:
         return jsonify({"error": "Unknown IATA code"}), 404
     tz = pytz.timezone(hub["tz"])
-    local_now = now.astimezone(tz)
-    local_today_str = local_now.strftime("%Y-%m-%d")
-    daily_log = load_daily_log()
 
-    data = fetch_and_log_weather(iata)
-    if not data:
-        return jsonify({"error": "Failed to fetch weather data"}), 500
+    if req_date:
+        local_now = datetime.strptime(req_date, "%Y-%m-%d").replace(tzinfo=tz)
+        local_today_str = req_date
+    else:
+        local_now = now.astimezone(tz)
+        local_today_str = local_now.strftime("%Y-%m-%d")
+
+    is_today = (local_today_str == datetime.now(tz).strftime("%Y-%m-%d"))
+
+    db_hours = HourlyWeather.query.filter_by(iata=iata, date=local_today_str).order_by(HourlyWeather.start_time).all()
+    logged_by_time = {h.start_time: h.as_dict() for h in db_hours}
+
+    data = fetch_and_log_weather(iata) if is_today else None
+
+    result_hourly = []
+    if is_today:
+        now_dt = datetime.now(tz)
+        seen = set()
+        if data:
+            for period in data["hourly"]:
+                dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
+                key = period["startTime"]
+                if dt <= now_dt and key in logged_by_time:
+                    result_hourly.append(logged_by_time[key])
+                    seen.add(key)
+                else:
+                    result_hourly.append(period)
+                    seen.add(key)
+        for key, val in logged_by_time.items():
+            if key not in seen:
+                result_hourly.append(val)
+        result_hourly.sort(key=lambda x: x["startTime"])
+        data_out = data or {}
+        data_out["hourly"] = result_hourly
+        data_out["timezone"] = tz.zone
+    else:
+        result_hourly = list(logged_by_time.values())
+        result_hourly.sort(key=lambda x: x["startTime"])
+        data_out = {
+            "hourly": result_hourly,
+            "daily": [],
+            "timezone": tz.zone
+        }
 
     merged_log = load_daily_log()
-    result_hourly = []
-    if merged_log.get("date") == local_today_str and iata in merged_log.get("hubs", {}):
-        log_entry = merged_log["hubs"][iata]
-        log_hours_by_start = {h["startTime"]: h for h in log_entry.get("hourly", [])}
-        for period in data["hourly"]:
-            dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
-            is_past = dt <= local_now
-            key = period["startTime"]
-            if is_past and key in log_hours_by_start:
-                result_hourly.append(log_hours_by_start[key])
-            else:
-                result_hourly.append(period)
-        data["hourly"] = result_hourly
-
-    data["sirs"] = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
-    data["terminal_constraints"] = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
+    data_out["sirs"] = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
+    data_out["terminal_constraints"] = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
     faa_events = get_events_for_hub_day(iata, local_now, hub["tz"])
-    data["faa_events"] = faa_events
+    data_out["faa_events"] = faa_events
 
-    return jsonify(data)
+    return jsonify(data_out)
 
 @app.route("/api/groundstops")
 def groundstops_api():

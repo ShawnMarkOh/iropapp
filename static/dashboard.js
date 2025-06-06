@@ -6,7 +6,128 @@ function windToKts(val) {if (!val) return 0;let v = parseFloat(val);if (/mph/.te
 function windToMPH(val) {if (!val) return 0;let v = parseFloat(val);if (/mph/.test(val)) return v;return v * 1.15078;}
 function crosswindComponent(runwayHeading, windDir, windKts) {let windDeg = windDirToDeg(windDir);if (windDeg === null) return 0;let angle = Math.abs(runwayHeading - windDeg);if (angle > 180) angle = 360 - angle;let rad = angle * Math.PI / 180;let cross = Math.abs(windKts * Math.sin(rad));return cross;}
 function getHourWindRisk(spd, cross) {if (spd > 50) return {risk:"high", txt:"Wind > 50 kts", class:"hour-wind"};if (spd > 35) return {risk:"wind-high", txt:"High wind ("+spd+" kts)", class:"hour-wind-high"};if (spd > 0 && spd > 27) return {risk:"partial", txt:"Wind ("+spd+" kts)", class:"hour-wind"};if (cross > 27) return {risk:"high", txt:"Crosswind "+cross+" kts", class:"hour-wind"};if (cross > 20) return {risk:"wind-high", txt:"High crosswind ("+cross+" kts)", class:"hour-wind-high"};if (cross > 15) return {risk:"wind-partial", txt:"Moderate crosswind ("+cross+" kts)", class:"hour-wind-partial"};return null;}
-function analyzeRunwaySafety(runways, windDir, windKts) {let runwayResults = [];for (let rw of runways) {if (rw.len < 6000) continue;let cross = crosswindComponent(rw.heading, windDir, windKts);let safe = (windKts <= 50) && (cross <= 27);let warning = !safe && windKts > 50 ? "UNSAFE WIND" : (!safe ? "UNSAFE CROSSWIND" : "SAFE");runwayResults.push({label: rw.label, cross: Math.round(cross), safe: safe, warning: warning, len: rw.len});}return runwayResults;}
+function analyzeRunwaySafety(runways, windDir, windKts) {
+    let runwayResults = [];
+    for (let rw of runways) {
+        if (rw.len < 5040) continue;
+        let cross = crosswindComponent(rw.heading, windDir, windKts);
+        let status = "";
+        let className = "";
+        if (rw.len >= 5360) {
+            let safe = (windKts <= 50) && (cross <= 27);
+            status = safe ? "SAFE" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
+            className = safe ? "runway-safe" : "runway-unsafe";
+        } else if (rw.len >= 5040) {
+            let safe = (windKts <= 50) && (cross <= 27);
+            status = safe ? "SAFE (CRJ700)" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
+            className = safe ? "runway-crj700only" : "runway-unsafe";
+        }
+        if (rw.len >= 5040) {
+            runwayResults.push({
+                label: rw.label,
+                cross: Math.round(cross),
+                safe: status.startsWith("SAFE"),
+                warning: status,
+                len: rw.len,
+                className: className
+            });
+        }
+    }
+    return runwayResults;
+}
+function getHourRisk(forecast) {if (!forecast) return {risk:"clear", key:null, hourClass: "hour-clear"};let forecastL = forecast.toLowerCase();if (/thunderstorms likely|severe thunderstorm|severe t[- ]?storm|tstm likely|t\.storm likely|t[- ]?storm likely/.test(forecastL)) {return { risk: "high", key: "Thunder", hourClass: "hour-thunder" };}if (/thunderstorm|tstm|t-storm|t\.storm/.test(forecastL)) {if (/slight chance|chance/.test(forecastL)) {return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}if (/severe|tornado|hail|damaging wind|squall|snow|blizzard|ice|sleet|wintry|freezing rain|freezing drizzle/.test(forecastL)) {return { risk: "high", key: "Severe", hourClass: "hour-severe" };}if (/heavy rain|flood|downpour|fog|low visibility|low clouds/.test(forecastL)) {return { risk: "partial", key: null, hourClass: "hour-other" };}return { risk: "clear", key: null, hourClass: "hour-clear" };}
+function formatLocalDateOnly(dtIso, tz) {try {const d = new Date(dtIso);return new Intl.DateTimeFormat('en-US', {weekday: "short", month: "short", day: "numeric", year: "numeric",timeZone: tz}).format(d);} catch { return dtIso; }}
+function getDailyAssessment(percentHigh, percentPartial) {
+    if (percentHigh >= 30)
+        return { label: "⚠️ High IROPS Risk", class: "risk-high", summary: "High IROPS risk" };
+    if (percentHigh >= 25)
+        return { label: "🟧 Moderate IROPS Risk", class: "risk-moderate", summary: "Moderate IROPS risk" };
+    if (percentHigh >= 10 || percentPartial >= 30)
+        return { label: "⛅ Partial IROPS Risk", class: "risk-partial", summary: "Partial IROPS risk" };
+    if (percentPartial >= 10)
+        return { label: "⛅ Slight IROPS Risk", class: "risk-partial", summary: "Slight IROPS risk" };
+    return { label: "✔️ No Weather Risk", class: "risk-normal", summary: "No Weather Risk" };
+}
+
+async function getHubs() { const resp = await fetch('/api/hubs'); HUBS = await resp.json(); return HUBS; }
+async function fetchGroundStops() { let res = await fetch('/api/groundstops'); return await res.json(); }
+async function fetchWeather(iata) {
+  let url = '/api/weather/' + iata;
+  let dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+  if (dateMatch) {
+    url += '?date=' + dateMatch[1];
+  }
+  let res = await fetch(url);
+  return await res.json();
+}
+
+async function loadDashboard() {
+  const dashboard = document.getElementById('dashboard');
+  dashboard.innerHTML = '<div style="font-size:1.2rem; padding:22px;">Loading weather data for all bases...</div>';
+  let allDayBase = [[],[],[]], dailyBrief = [{}, {}, {}], dayLabels = [], allDone = 0;
+  for (const hub of HUBS) {
+    try {
+      const wx = await fetchWeather(hub.iata);
+      window.LATEST_SIRS = wx.sirs || [];
+      window.LATEST_CONSTRAINTS = wx.terminal_constraints || [];
+      FAA_EVENTS[hub.iata] = wx.faa_events || [];
+      const nowLocal = new Date(new Date().toLocaleString("en-US", {timeZone: hub.tz}));
+      const todayYMD = nowLocal.getFullYear() + "-" + String(nowLocal.getMonth()+1).padStart(2, "0") + "-" + String(nowLocal.getDate()).padStart(2, "0");
+      for (let dayIdx=0; dayIdx<3; ++dayIdx) {
+        const dayDate = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate() + dayIdx);
+        const ymd = dayDate.getFullYear() + "-" + String(dayDate.getMonth()+1).padStart(2,"0") + "-" + String(dayDate.getDate()).padStart(2,"0");
+        let period = wx.daily && wx.daily.find(p=>{
+          const pd = new Date(new Date(p.startTime).toLocaleString("en-US", {timeZone: hub.tz}));
+          const p_ymd = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0") + "-" + String(pd.getDate()).padStart(2,"0");
+          return p_ymd === ymd && p.isDaytime;
+        }) || (wx.daily && wx.daily.find(p=>{
+          const pd = new Date(new Date(p.startTime).toLocaleString("en-US", {timeZone: hub.tz}));
+          const p_ymd = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0") + "-" + String(pd.getDate()).padStart(2,"0");
+          return p_ymd === ymd;
+        }));
+        if (!dayLabels[dayIdx] && period) dayLabels[dayIdx] = (period.name || "Day") + " (" + formatLocalDateOnly(period.startTime, hub.tz) + ")";
+        else if (!dayLabels[dayIdx]) dayLabels[dayIdx] = formatLocalDateOnly(dayDate, hub.tz);
+        const highlightHour = (ymd === todayYMD) ? nowLocal.getHours() : null;
+        let faaEventsForDay = (FAA_EVENTS[hub.iata]||[]).filter(e => {
+          if (e.local_hour !== undefined && e.local_hour !== null) {
+            let eventDate = new Date(new Date().toLocaleString("en-US", {timeZone: hub.tz}));
+            eventDate.setHours(e.local_hour,0,0,0);
+            const eymd = eventDate.getFullYear() + "-" + String(eventDate.getMonth()+1).padStart(2,"0") + "-" + String(eventDate.getDate()).padStart(2,"0");
+            return eymd === ymd;
+          }
+          return false;
+        });
+        const {hourBlocks, percentHigh, percentPartial, total} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay);
+        const assessment = getDailyAssessment(percentHigh, percentPartial);
+        const card = {
+          hub, name: hub.name, iata: hub.iata, city: hub.city,
+          label: (period && period.name) || "Day",
+          date: (period && formatLocalDateOnly(period.startTime, hub.tz)) || formatLocalDateOnly(dayDate, hub.tz),
+          temp: (period && (period.temperature + "°" + period.temperatureUnit)) || "--",
+          shortForecast: (period && period.shortForecast) || "",
+          detailedForecast: (period && period.detailedForecast) || "",
+          wind: (period && (period.windSpeed + (period.windGust ? `, Gusts ${period.windGust}` : ""))) || "--",
+          percentHigh, percentPartial,
+          riskLabel: assessment.label,
+          riskClass: assessment.class,
+          hourBlocks,
+          summary: assessment.summary
+        };
+        allDayBase[dayIdx].push(card);
+        if (!dailyBrief[dayIdx][assessment.summary]) dailyBrief[dayIdx][assessment.summary] = [];
+        dailyBrief[dayIdx][assessment.summary].push(hub.iata);
+        if (!dailyBrief[dayIdx].details) dailyBrief[dayIdx].details = [];
+        if (percentHigh>0)
+          dailyBrief[dayIdx].details.push(`${hub.iata}: ${percentHigh}% wx hours (${card.shortForecast})`);
+      }
+      allDone++;
+      if (allDone === HUBS.length) renderDashboard(allDayBase, dayLabels, dailyBrief);
+    } catch (err) {
+      allDone++;
+      if (allDone === HUBS.length) renderDashboard(allDayBase, dayLabels, dailyBrief);
+    }
+  }
+}
 function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, ymdStr, runways, faaEventsForDay) {
   let hourData = {};
   for (const period of hourlyPeriods) {
@@ -104,8 +225,11 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   }
   for (let h=0; h<24; h++) {
     if (rawRisks[h] !== "nodata") total++;
-    if (highMark[h]) countHigh++;
-    else if (partialMark[h]) countPartial++;
+    // Weather 1am-4am has very low operational impact: exclude from headline risk
+    if (h < 1 || h > 3) {
+      if (highMark[h]) countHigh++;
+      else if (partialMark[h]) countPartial++;
+    }
   }
   for (let h=0; h<24; h++) {
     if ((rawRisks[h]==="high" || rawRisks[h]==="partial") && !highMark[h] && !partialMark[h]) {
@@ -114,118 +238,7 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   }
   return {hourBlocks,percentHigh: total ? Math.round((countHigh/total)*100) : 0,percentPartial: total ? Math.round((countPartial/total)*100) : 0,total};
 }
-function analyzeRunwaySafety(runways, windDir, windKts) {
-    let runwayResults = [];
-    for (let rw of runways) {
-        if (rw.len < 5040) continue;  // Only show runways long enough for CRJ700
 
-        let cross = crosswindComponent(rw.heading, windDir, windKts);
-        let status = "";
-        let className = "";
-
-        if (rw.len >= 5360) {
-            // SAFE for both CRJ900 and CRJ700
-            let safe = (windKts <= 50) && (cross <= 27);
-            status = safe ? "SAFE" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
-            className = safe ? "runway-safe" : "runway-unsafe";
-        } else if (rw.len >= 5040) {
-            // Only SAFE for CRJ700
-            let safe = (windKts <= 50) && (cross <= 27);
-            status = safe ? "SAFE (CRJ700)" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
-            className = safe ? "runway-crj700only" : "runway-unsafe";
-        }
-
-        // Add to display if meets either threshold
-        if (rw.len >= 5040) {
-            runwayResults.push({
-                label: rw.label,
-                cross: Math.round(cross),
-                safe: status.startsWith("SAFE"),
-                warning: status,
-                len: rw.len,
-                className: className
-            });
-        }
-    }
-    return runwayResults;
-}
-function getHourRisk(forecast) {if (!forecast) return {risk:"clear", key:null, hourClass: "hour-clear"};let forecastL = forecast.toLowerCase();if (/thunderstorms likely|severe thunderstorm|severe t[- ]?storm|tstm likely|t\.storm likely|t[- ]?storm likely/.test(forecastL)) {return { risk: "high", key: "Thunder", hourClass: "hour-thunder" };}if (/thunderstorm|tstm|t-storm|t\.storm/.test(forecastL)) {if (/slight chance|chance/.test(forecastL)) {return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}if (/severe|tornado|hail|damaging wind|squall|snow|blizzard|ice|sleet|wintry|freezing rain|freezing drizzle/.test(forecastL)) {return { risk: "high", key: "Severe", hourClass: "hour-severe" };}if (/heavy rain|flood|downpour|fog|low visibility|low clouds/.test(forecastL)) {return { risk: "partial", key: null, hourClass: "hour-other" };}return { risk: "clear", key: null, hourClass: "hour-clear" };}
-function formatLocalDateOnly(dtIso, tz) {try {const d = new Date(dtIso);return new Intl.DateTimeFormat('en-US', {weekday: "short", month: "short", day: "numeric", year: "numeric",timeZone: tz}).format(d);} catch { return dtIso; }}
-function getDailyAssessment(percentHigh, percentPartial) {if (percentHigh >= 30) return { label: "⚠️ High IROPS Risk", class: "risk-high", summary: "High IROPS risk" };if (percentHigh >= 10 || percentPartial >= 30) return { label: "⛅ Partial IROPS Risk", class: "risk-partial", summary: "Partial IROPS risk" };if (percentPartial >= 10) return { label: "⛅ Slight IROPS Risk", class: "risk-partial", summary: "Slight IROPS risk" };return { label: "✔️ No Weather Risk", class: "risk-normal", summary: "No Weather Risk" };}
-async function getHubs() { const resp = await fetch('/api/hubs'); HUBS = await resp.json(); return HUBS; }
-async function fetchGroundStops() { let res = await fetch('/api/groundstops'); return await res.json(); }
-async function fetchWeather(iata) { let res = await fetch('/api/weather/' + iata); return await res.json(); }
-async function loadDashboard() {
-  const dashboard = document.getElementById('dashboard');
-  dashboard.innerHTML = '<div style="font-size:1.2rem; padding:22px;">Loading weather data for all bases...</div>';
-  let allDayBase = [[],[],[]], dailyBrief = [{}, {}, {}], dayLabels = [], allDone = 0;
-  for (const hub of HUBS) {
-    try {
-      const wx = await fetchWeather(hub.iata);
-
-      // Store SIRs and terminal constraints globally for modal use
-      window.LATEST_SIRS = wx.sirs || [];
-      window.LATEST_CONSTRAINTS = wx.terminal_constraints || [];
-
-      FAA_EVENTS[hub.iata] = wx.faa_events || [];
-      const nowLocal = new Date(new Date().toLocaleString("en-US", {timeZone: hub.tz}));
-      const todayYMD = nowLocal.getFullYear() + "-" + String(nowLocal.getMonth()+1).padStart(2, "0") + "-" + String(nowLocal.getDate()).padStart(2, "0");
-      for (let dayIdx=0; dayIdx<3; ++dayIdx) {
-        const dayDate = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate() + dayIdx);
-        const ymd = dayDate.getFullYear() + "-" + String(dayDate.getMonth()+1).padStart(2, "0") + "-" + String(dayDate.getDate()).padStart(2, "0");
-        let period = wx.daily.find(p=>{
-          const pd = new Date(new Date(p.startTime).toLocaleString("en-US", {timeZone: hub.tz}));
-          const p_ymd = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0") + "-" + String(pd.getDate()).padStart(2,"0");
-          return p_ymd === ymd && p.isDaytime;
-        }) || wx.daily.find(p=>{
-          const pd = new Date(new Date(p.startTime).toLocaleString("en-US", {timeZone: hub.tz}));
-          const p_ymd = pd.getFullYear() + "-" + String(pd.getMonth()+1).padStart(2,"0") + "-" + String(pd.getDate()).padStart(2,"0");
-          return p_ymd === ymd;
-        });
-        if (!dayLabels[dayIdx] && period) dayLabels[dayIdx] = (period.name || "Day") + " (" + formatLocalDateOnly(period.startTime, hub.tz) + ")";
-        else if (!dayLabels[dayIdx]) dayLabels[dayIdx] = formatLocalDateOnly(dayDate, hub.tz);
-        const highlightHour = (ymd === todayYMD) ? nowLocal.getHours() : null;
-        // Only pass today's events
-        let faaEventsForDay = (FAA_EVENTS[hub.iata]||[]).filter(e => {
-          if (e.local_hour !== undefined && e.local_hour !== null) {
-            let eventDate = new Date(new Date().toLocaleString("en-US", {timeZone: hub.tz}));
-            eventDate.setHours(e.local_hour,0,0,0);
-            const eymd = eventDate.getFullYear() + "-" + String(eventDate.getMonth()+1).padStart(2,"0") + "-" + String(eventDate.getDate()).padStart(2,"0");
-            return eymd === ymd;
-          }
-          return false;
-        });
-        const {hourBlocks, percentHigh, percentPartial, total} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay);
-        const assessment = getDailyAssessment(percentHigh, percentPartial);
-        const card = {
-          hub, name: hub.name, iata: hub.iata, city: hub.city,
-          label: (period && period.name) || "Day",
-          date: (period && formatLocalDateOnly(period.startTime, hub.tz)) || formatLocalDateOnly(dayDate, hub.tz),
-          temp: (period && (period.temperature + "°" + period.temperatureUnit)) || "--",
-          shortForecast: (period && period.shortForecast) || "",
-          detailedForecast: (period && period.detailedForecast) || "",
-          wind: (period && (period.windSpeed + (period.windGust ? `, Gusts ${period.windGust}` : ""))) || "--",
-          percentHigh, percentPartial,
-          riskLabel: assessment.label,
-          riskClass: assessment.class,
-          hourBlocks,
-          summary: assessment.summary
-        };
-        allDayBase[dayIdx].push(card);
-        if (!dailyBrief[dayIdx][assessment.summary]) dailyBrief[dayIdx][assessment.summary] = [];
-        dailyBrief[dayIdx][assessment.summary].push(hub.iata);
-        if (!dailyBrief[dayIdx].details) dailyBrief[dayIdx].details = [];
-        if (percentHigh>0)
-          dailyBrief[dayIdx].details.push(`${hub.iata}: ${percentHigh}% wx hours (${card.shortForecast})`);
-      }
-      allDone++;
-      if (allDone === HUBS.length) renderDashboard(allDayBase, dayLabels, dailyBrief);
-    } catch (err) {
-      allDone++;
-      if (allDone === HUBS.length) renderDashboard(allDayBase, dayLabels, dailyBrief);
-    }
-  }
-}
 function renderDashboard(allDayBase, dayLabels, dailyBrief) {
   let briefingHTML = "";
   ["Today", "Tomorrow", "The day after"].forEach((when, idx) => {
@@ -293,7 +306,6 @@ function renderBaseCard(card) {
     </div>
   `;
 }
-
 function showHourModal(block, base, dayLabel) {
   const modalLabel = document.getElementById('hourModalLabel');
   const modalBody = document.getElementById('hourModalBody');
@@ -413,20 +425,16 @@ function showHourModal(block, base, dayLabel) {
   modal.show();
 }
 
-
-
-
 function scheduleHourlyRefresh() {
   const now = new Date();
   const msToNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
   setTimeout(function() { window.location.reload(); }, msToNextHour + 1000);
 }
-// Optional: also refresh every 10 minutes for live data
 setInterval(function() {
     window.location.reload();
 }, 600000);
 
-document.addEventListener('DOMContentLoaded', async ()=>{
+document.addEventListener('DOMContentLoaded', async () => {
   HUBS = await getHubs();
   const groundstops = await fetchGroundStops();
   let watched = HUBS.map(h => h.iata);
@@ -441,4 +449,34 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   }
   loadDashboard();
   scheduleHourlyRefresh();
+
+  const btn = document.getElementById('weatherHistoryBtn');
+  if (btn) {
+    btn.onclick = function() {
+      let modal = new bootstrap.Modal(document.getElementById('dateModal'));
+      modal.show();
+    };
+  }
+  const pickDateBtn = document.getElementById('pickDateBtn');
+  if (pickDateBtn) {
+    pickDateBtn.onclick = function() {
+      const picker = document.getElementById('datePicker');
+      if (picker && picker.value) {
+        window.location = `/?date=${picker.value}`;
+      }
+    }
+  }
+
+  // Optional: show a banner if viewing a historical day
+  let dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+  if (dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10))) {
+    let banner = document.createElement('div');
+    banner.innerHTML = `<b>Viewing archived weather for ${dateMatch[1]}</b>`;
+    banner.style.background = '#ffc';
+    banner.style.color = '#b36a00';
+    banner.style.fontSize = '1.15rem';
+    banner.style.textAlign = 'center';
+    banner.style.padding = '8px';
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
 });

@@ -9,6 +9,12 @@ body {background: #f3f6fa; color: #232323; min-height: 100vh;}
 .risk-wind {color: #2968c6; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
 .risk-wind-high {color: #db710a; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
 .risk-wind-partial {color: #6c35a3; font-weight: bold; font-size: 1.02rem; margin-top: 7px; letter-spacing: 0.5px;}
+.risk-moderate {
+  color: #ff8c1a;
+  font-weight: bold;
+  font-size: 1.03rem;
+  letter-spacing: 0.5px;
+}
 .short-forecast {font-size: 1.04rem; margin-bottom: 5px; font-weight: 500;}
 .base-details {color: #374151; font-size: 0.98rem; margin-bottom: 6px;}
 .hourly-breakdown {margin-top: 10px; width: 100%; font-size: 0.97rem; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0;}
