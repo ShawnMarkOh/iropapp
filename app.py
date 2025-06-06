@@ -426,7 +426,26 @@ def periodic_ops_plan_refresh():
         import time
         time.sleep(600)
 
+
 threading.Thread(target=periodic_ops_plan_refresh, daemon=True).start()
+
+@app.route('/db_status')
+def db_status():
+    import math
+    db_path = os.path.join(DATA_DIR, "weatherlog.db")
+    try:
+        size_bytes = os.path.getsize(db_path)
+        if size_bytes < 1024 * 1024 * 1024:
+            size = round(size_bytes / (1024 * 1024), 2)
+            unit = "MB"
+        else:
+            size = round(size_bytes / (1024 * 1024 * 1024), 2)
+            unit = "GB"
+    except Exception:
+        size = 0
+        unit = "MB"
+    days = db.session.query(HourlyWeather.date).distinct().count()
+    return f"The DB is {size} {unit} in size and contains {days} days worth of data"
 
 if __name__ == "__main__":
     app.run(debug=True)
