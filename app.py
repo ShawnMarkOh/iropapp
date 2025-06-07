@@ -149,7 +149,6 @@ def get_latest_ops_plan_json():
     now = datetime.utcnow()
     cache = FAA_OPS_PLAN_URL_CACHE
     if cache.get("json") and cache.get("time") and (now - cache["time"]).total_seconds() < 600:
-        print("USING CACHED FAA OPS PLAN JSON.")
         return cache["json"]
     try:
         api_url = "https://nasstatus.faa.gov/api/operations-plan"
@@ -157,17 +156,14 @@ def get_latest_ops_plan_json():
         if resp.ok:
             data = resp.json()
             FAA_OPS_PLAN_URL_CACHE.update({"json": data, "time": now})
-            print("Fetched FAA OPS PLAN JSON.")
-            print("OPS PLAN LINK:", data.get("link"))
             return data
-    except Exception as e:
-        print("OPS plan API error:", e)
+    except Exception:
+        pass
     FAA_OPS_PLAN_URL_CACHE.update({"json": None, "time": now})
     return None
 
-def parse_faa_ops_plan_json(data):
+def parse_faa_ops_plan_json(data, base_date=None):
     if not data or "terminalPlanned" not in data:
-        print("No terminal planned data in FAA OPS PLAN JSON.")
         return []
     events = []
     for item in data["terminalPlanned"]:
@@ -179,25 +175,31 @@ def parse_faa_ops_plan_json(data):
             if not m:
                 continue
             when_type, zulu_time = m.group(1), m.group(2)
+            # Adjust the date if AFTER time has already passed for the current local day
+            dt_utc = datetime.utcnow()
+            event_hour = int(zulu_time[:2])
+            event_min = int(zulu_time[2:])
+            # Determine event date reference
+            ref_date = base_date or dt_utc.date()
+            event_dt_utc = datetime(dt_utc.year, dt_utc.month, dt_utc.day, event_hour, event_min, tzinfo=pytz.utc)
+            if when_type == "AFTER" and dt_utc.hour >= event_hour:
+                # If we're past the event's hour, treat it as tomorrow
+                event_dt_utc += timedelta(days=1)
             events.append({
                 "iata": iata,
                 "when_type": when_type,
                 "zulu_time": zulu_time,
                 "desc": event_str,
                 "when": time_str,
+                "event_dt_utc": event_dt_utc.isoformat()
             })
-    print(f"\n--- FAA EVENTS FROM JSON ---")
-    for e in events:
-        print(e)
-    print("--- END FAA EVENTS ---\n")
     return events
 
 def get_faa_events_by_day(dt):
     data = get_latest_ops_plan_json()
     if not data:
-        print("No FAA OPS PLAN JSON data to parse!")
         return []
-    return parse_faa_ops_plan_json(data)
+    return parse_faa_ops_plan_json(data, base_date=dt)
 
 def get_events_for_hub_day(hub_iata, local_dt, tz_str):
     utc_dt = local_dt.astimezone(pytz.utc)
@@ -212,6 +214,10 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
         z_min = int(e["zulu_time"][2:])
         dt_utc = datetime(utc_dt.year, utc_dt.month, utc_dt.day, z_hour, z_min, tzinfo=pytz.utc)
         dt_local = dt_utc.astimezone(pytz.timezone(tz_str))
+        # If AFTER event and we're past the hour, assign to tomorrow
+        if e["when_type"] == "AFTER":
+            if local_dt.hour >= dt_local.hour:
+                dt_local = dt_local + timedelta(days=1)
         if e["when_type"] == "AFTER":
             after_events.append({
                 "from_hour": dt_local.hour,
@@ -409,6 +415,16 @@ def groundstops_api():
                         reason = gs.findtext("reason") or "Ground stop in effect"
                         output[iata] = reason
             return jsonify(output)
+        elif resp.ok and resp.headers.get("Content-Type", "").startswith("application/json"):
+            data = resp.json()
+            output = {}
+            for ap in data.get("AirportStatusList", []):
+                iata = ap.get("IATA")
+                for gs in ap.get("GroundStops", []):
+                    if gs.get("EndTime"):
+                        reason = gs.get("Reason", "Ground stop in effect")
+                        output[iata] = reason
+            return jsonify(output)
     except Exception:
         pass
     return jsonify({})
@@ -417,21 +433,8 @@ def groundstops_api():
 def custom_static(filename):
     return send_from_directory('static', filename)
 
-def periodic_ops_plan_refresh():
-    while True:
-        try:
-            get_latest_ops_plan_json()
-        except Exception:
-            pass
-        import time
-        time.sleep(600)
-
-
-threading.Thread(target=periodic_ops_plan_refresh, daemon=True).start()
-
 @app.route('/db_status')
 def db_status():
-    import math
     db_path = os.path.join(DATA_DIR, "weatherlog.db")
     try:
         size_bytes = os.path.getsize(db_path)
@@ -446,6 +449,17 @@ def db_status():
         unit = "MB"
     days = db.session.query(HourlyWeather.date).distinct().count()
     return f"The DB is {size} {unit} in size and contains {days} days worth of data"
+
+def periodic_ops_plan_refresh():
+    while True:
+        try:
+            get_latest_ops_plan_json()
+        except Exception:
+            pass
+        import time
+        time.sleep(600)
+
+threading.Thread(target=periodic_ops_plan_refresh, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(debug=True)

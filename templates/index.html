@@ -56,28 +56,30 @@
     Data: <a href="https://www.weather.gov/documentation/services-web-api" target="_blank" style="color:#2a58a5;">NWS API</a> and <a href="https://nasstatus.faa.gov/" target="_blank" style="color:#c00;">FAA NAS Status</a>.<br>
     <strong>IROPS = Irregular Operations.</strong>
     All times/dates are local to each airport. "No Weather Risk" means no thunderstorms or weather hazards are forecast for that hour. Does <u>not</u> guarantee VFR or IFR flight conditions.<br>
-    Brought to you by Shawn at Budget Airline Apps. The budget was $20.<br>
-	<div id="db-status" style="text-align:center; margin:30px 0 10px 0; font-size:1.09rem;">
-  <span>DB Status: 
-    <span id="db-size" style="color:#c00; font-weight:bold;"></span>
-    &nbsp;|&nbsp; 
-    <span id="db-days" style="color:#c00; font-weight:bold;"></span>
-  </span>
-</div>
-<script>
-fetch('/db_status')
-  .then(resp => resp.text())
-  .then(txt => {
-    // Example: "The DB is 25.4 MB in size and contains 18 days worth of data"
-    const sizeMatch = txt.match(/The DB is ([\d\.]+ (?:MB|GB))/i);
-    const daysMatch = txt.match(/contains (\d+) days?/i);
-    if (sizeMatch) document.getElementById('db-size').textContent = sizeMatch[1] + " in size";
-    if (daysMatch) document.getElementById('db-days').textContent = daysMatch[1] + " days of data";
-  });
-</script>
-
+    Brought to you by Shawn at Budget Airline Apps. The budget was $20.
   </div>
+
+  <!-- DB Status Display -->
+  <div id="db-status" style="text-align:center; margin:30px 0 10px 0; font-size:1.09rem;">
+    <span>DB Status: 
+      <span id="db-size" style="color:#c00; font-weight:bold;"></span>
+      &nbsp;|&nbsp; 
+      <span id="db-days" style="color:#c00; font-weight:bold;"></span>
+    </span>
+  </div>
+  <script>
+    fetch('/db_status')
+      .then(resp => resp.text())
+      .then(txt => {
+        // Example: "The DB is 25.4 MB in size and contains 18 days worth of data"
+        const sizeMatch = txt.match(/The DB is ([\d\.]+ (?:MB|GB))/i);
+        const daysMatch = txt.match(/contains (\d+) days?/i);
+        if (sizeMatch) document.getElementById('db-size').textContent = sizeMatch[1] + " in size";
+        if (daysMatch) document.getElementById('db-days').textContent = daysMatch[1] + " days of data";
+      });
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/faa_translate.js"></script>
   <script src="/static/dashboard.js"></script>
 </body>
 </html>
