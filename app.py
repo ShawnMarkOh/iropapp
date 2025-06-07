@@ -34,6 +34,21 @@ class HourlyWeather(db.Model):
             **json.loads(self.data_json)
         }
 
+# --- NEW: HourlySnapshot model for full dashboard snapshots ---
+class HourlySnapshot(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    iata = db.Column(db.String(4), index=True, nullable=False)
+    date = db.Column(db.String(10), index=True, nullable=False)
+    hour = db.Column(db.Integer, index=True, nullable=False)
+    snapshot_json = db.Column(db.Text, nullable=False)
+    def as_dict(self):
+        return {
+            "iata": self.iata,
+            "date": self.date,
+            "hour": self.hour,
+            **json.loads(self.snapshot_json)
+        }
+
 with app.app_context():
     db.create_all()
 
@@ -175,15 +190,12 @@ def parse_faa_ops_plan_json(data, base_date=None):
             if not m:
                 continue
             when_type, zulu_time = m.group(1), m.group(2)
-            # Adjust the date if AFTER time has already passed for the current local day
             dt_utc = datetime.utcnow()
             event_hour = int(zulu_time[:2])
             event_min = int(zulu_time[2:])
-            # Determine event date reference
             ref_date = base_date or dt_utc.date()
             event_dt_utc = datetime(dt_utc.year, dt_utc.month, dt_utc.day, event_hour, event_min, tzinfo=pytz.utc)
             if when_type == "AFTER" and dt_utc.hour >= event_hour:
-                # If we're past the event's hour, treat it as tomorrow
                 event_dt_utc += timedelta(days=1)
             events.append({
                 "iata": iata,
@@ -214,7 +226,6 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
         z_min = int(e["zulu_time"][2:])
         dt_utc = datetime(utc_dt.year, utc_dt.month, utc_dt.day, z_hour, z_min, tzinfo=pytz.utc)
         dt_local = dt_utc.astimezone(pytz.timezone(tz_str))
-        # If AFTER event and we're past the hour, assign to tomorrow
         if e["when_type"] == "AFTER":
             if local_dt.hour >= dt_local.hour:
                 dt_local = dt_local + timedelta(days=1)
@@ -459,7 +470,50 @@ def periodic_ops_plan_refresh():
         import time
         time.sleep(600)
 
+# --- NEW: Background thread to archive hourly dashboard snapshots for all hubs ---
+def hourly_snapshot_job():
+    import time
+    with app.app_context():
+        while True:
+            now = datetime.now()
+            cur_date = now.strftime('%Y-%m-%d')
+            cur_hour = now.hour
+            for hub in HUBS:
+                iata = hub["iata"]
+                weather_data = fetch_and_log_weather(iata)
+                merged_log = load_daily_log()
+                sirs = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
+                terminal_constraints = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
+                faa_events = get_events_for_hub_day(iata, now, hub["tz"])
+                snapshot = {
+                    "weather": weather_data,
+                    "sirs": sirs,
+                    "terminal_constraints": terminal_constraints,
+                    "faa_events": faa_events
+                }
+                exists = HourlySnapshot.query.filter_by(iata=iata, date=cur_date, hour=cur_hour).first()
+                if not exists:
+                    db.session.add(HourlySnapshot(
+                        iata=iata,
+                        date=cur_date,
+                        hour=cur_hour,
+                        snapshot_json=json.dumps(snapshot)
+                    ))
+                else:
+                    exists.snapshot_json = json.dumps(snapshot)
+                db.session.commit()
+            time_to_next_hour = 3600 - (datetime.now().minute * 60 + datetime.now().second)
+            time.sleep(time_to_next_hour)
+
+
+# --- NEW: API endpoint to retrieve archived hourly dashboard snapshots ---
+@app.route("/api/hourly-snapshots/<iata>/<date>")
+def api_hourly_snapshots(iata, date):
+    rows = HourlySnapshot.query.filter_by(iata=iata.upper(), date=date).order_by(HourlySnapshot.hour).all()
+    return jsonify([r.as_dict() for r in rows])
+
 threading.Thread(target=periodic_ops_plan_refresh, daemon=True).start()
+threading.Thread(target=hourly_snapshot_job, daemon=True).start()
 
 if __name__ == "__main__":
     app.run(debug=True)

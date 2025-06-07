@@ -48,7 +48,6 @@ function getDailyAssessment(percentHigh, percentPartial) {
         return { label: "⛅ Slight IROPS Risk", class: "risk-partial", summary: "Slight IROPS risk" };
     return { label: "✔️ No Weather Risk", class: "risk-normal", summary: "No Weather Risk" };
 }
-
 async function getHubs() { const resp = await fetch('/api/hubs'); HUBS = await resp.json(); return HUBS; }
 async function fetchGroundStops() { let res = await fetch('/api/groundstops'); return await res.json(); }
 async function fetchWeather(iata) {
@@ -60,16 +59,57 @@ async function fetchWeather(iata) {
   let res = await fetch(url);
   return await res.json();
 }
-
+async function fetchSnapshots(iata, date) {
+    let url = `/api/hourly-snapshots/${iata}/${date}`;
+    let res = await fetch(url);
+    return await res.json();
+}
 async function loadDashboard() {
   const dashboard = document.getElementById('dashboard');
   dashboard.innerHTML = '<div style="font-size:1.2rem; padding:22px;">Loading weather data for all bases...</div>';
   let allDayBase = [[],[],[]], dailyBrief = [{}, {}, {}], dayLabels = [], allDone = 0;
   const dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
   const baseDate = dateMatch ? new Date(dateMatch[1] + "T00:00:00") : new Date();
+  const isArchive = dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10));
   for (const hub of HUBS) {
     try {
-      const wx = await fetchWeather(hub.iata);
+      let wx;
+      if (isArchive) {
+        let snapshots = await fetchSnapshots(hub.iata, dateMatch[1]);
+        let periods = Array(24).fill(null);
+        let faa_events = [];
+        let sirs = [];
+        let terminal_constraints = [];
+        let timezone = hub.tz;
+        if (snapshots.length) {
+          snapshots.forEach(snap => {
+            let hour = snap.hour;
+            let data = snap.weather || {};
+            if (data.hourly && data.hourly.length) {
+              let found = data.hourly.find(
+                p => {
+                  let pd = new Date(new Date(p.startTime).toLocaleString("en-US", {timeZone: timezone}));
+                  return pd.getHours() === hour;
+                }
+              );
+              if (found) periods[hour] = found;
+            }
+            faa_events = snap.faa_events || faa_events;
+            sirs = snap.sirs || sirs;
+            terminal_constraints = snap.terminal_constraints || terminal_constraints;
+          });
+        }
+        wx = {
+          hourly: periods.filter(x => x),
+          daily: [],
+          timezone,
+          sirs,
+          terminal_constraints,
+          faa_events
+        };
+      } else {
+        wx = await fetchWeather(hub.iata);
+      }
       window.LATEST_SIRS = wx.sirs || [];
       window.LATEST_CONSTRAINTS = wx.terminal_constraints || [];
       FAA_EVENTS[hub.iata] = wx.faa_events || [];
@@ -237,6 +277,8 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   return {hourBlocks,percentHigh: total ? Math.round((countHigh/total)*100) : 0,percentPartial: total ? Math.round((countPartial/total)*100) : 0,total};
 }
 function renderDashboard(allDayBase, dayLabels, dailyBrief) {
+  const dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+  const isArchive = dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10));
   let briefingHTML = "";
   ["Today", "Tomorrow", "The day after"].forEach((when, idx) => {
     let b = dailyBrief[idx], txts = [];
@@ -259,12 +301,12 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
     briefingHTML += `<div style="margin-bottom:8px;"><b>${when}'s outlook:</b> ${txts.length ? txts.join(", ") : "No weather risk expected."}${detailTxt}</div>`;
   });
   document.getElementById('briefing-summary').innerHTML = briefingHTML;
-  let dashHTML = "";
-  for (let dayIdx=0; dayIdx<3; ++dayIdx) {
-    dashHTML += `<div class="day-header">${dayLabels[dayIdx]}</div>`;
+
+  if (isArchive) {
+    let dashHTML = `<div class="day-header">${dayLabels[0]}</div>`;
     dashHTML += `<div class="container-fluid px-2">
       <div class="row g-3 justify-content-center">
-        ${allDayBase[dayIdx].map(card => `
+        ${allDayBase[0].map(card => `
           <div class="col-12 col-sm-6 col-lg-2 d-flex">
             <div class="card h-100 w-100 shadow-sm">
               <div class="card-body p-2 p-lg-3">
@@ -275,8 +317,27 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
         `).join("")}
       </div>
     </div>`;
+    document.getElementById('dashboard').innerHTML = dashHTML;
+  } else {
+    let dashHTML = "";
+    for (let dayIdx=0; dayIdx<3; ++dayIdx) {
+      dashHTML += `<div class="day-header">${dayLabels[dayIdx]}</div>`;
+      dashHTML += `<div class="container-fluid px-2">
+        <div class="row g-3 justify-content-center">
+          ${allDayBase[dayIdx].map(card => `
+            <div class="col-12 col-sm-6 col-lg-2 d-flex">
+              <div class="card h-100 w-100 shadow-sm">
+                <div class="card-body p-2 p-lg-3">
+                  ${renderBaseCard(card)}
+                </div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>`;
+    }
+    document.getElementById('dashboard').innerHTML = dashHTML;
   }
-  document.getElementById('dashboard').innerHTML = dashHTML;
 }
 
 function isFAAEventRelevant(event, hubIata) {
@@ -288,7 +349,6 @@ function isFAAEventRelevant(event, hubIata) {
   if (desc.includes(hubIata)) return true;
   return false;
 }
-
 function renderBaseCard(card) {
   return `
     <div class="base-title mb-1">${card.name} (${card.iata})<span style="font-size:.93rem;font-weight:400;color:#6a788a;"> – ${card.city}</span></div>
@@ -337,7 +397,6 @@ function showHourModal(block, base, dayLabel) {
   else if (block.riskClass === "nodata") riskStr = `<span class="hour-nodata">No data</span>`;
   else if (block.riskClass === "wind") riskStr = `<span class="risk-wind">Wind risk</span>`;
   else riskStr = `<span class="risk-normal">No Weather Risk</span>`;
-
   let closedRunways = [];
   if (window.LATEST_SIRS && window.LATEST_SIRS.length) {
     closedRunways = window.LATEST_SIRS.map(s => s.runway.replace(/\s/g,'').toUpperCase());
@@ -346,7 +405,6 @@ function showHourModal(block, base, dayLabel) {
   if (window.LATEST_CONSTRAINTS && window.LATEST_CONSTRAINTS.length) {
     terminalConstraints = window.LATEST_CONSTRAINTS;
   }
-
   let runwayStatusHTML = "";
   if (block.runways && block.runways.length > 0) {
     runwayStatusHTML = `
@@ -389,7 +447,6 @@ function showHourModal(block, base, dayLabel) {
       </div>
     `;
   }
-
   let faaEventsHTML = block.faaEvents && block.faaEvents.length > 0 ? block.faaEvents.map(ev =>
     `<div class="faa-event-summary"><b>FAA Event:</b> ${translateFAAString(ev.desc)}<br>
       <span style="color:#222;">
@@ -399,7 +456,6 @@ function showHourModal(block, base, dayLabel) {
       </span>
     </div>`
   ).join("") : "";
-
   let constraintsHTML = "";
   if (terminalConstraints && terminalConstraints.length) {
     constraintsHTML = `
@@ -411,7 +467,6 @@ function showHourModal(block, base, dayLabel) {
       </div>
     `;
   }
-
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
     <div class="modal-section">
@@ -439,11 +494,9 @@ function showHourModal(block, base, dayLabel) {
       <em>“No Weather Risk” means no thunderstorms or weather hazards in the forecast. Does <u>not</u> guarantee VFR or IFR flight conditions.</em>
     </div>
   `;
-
   let modal = new bootstrap.Modal(document.getElementById('hourModal'));
   modal.show();
 }
-
 function scheduleHourlyRefresh() {
   const now = new Date();
   const msToNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
@@ -452,7 +505,6 @@ function scheduleHourlyRefresh() {
 setInterval(function() {
     window.location.reload();
 }, 600000);
-
 document.addEventListener('DOMContentLoaded', async () => {
   HUBS = await getHubs();
   const groundstops = await fetchGroundStops();
@@ -468,7 +520,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   loadDashboard();
   scheduleHourlyRefresh();
-
   const btn = document.getElementById('weatherHistoryBtn');
   if (btn) {
     btn.onclick = function() {
@@ -485,8 +536,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   }
-
-  // Optional: show a banner if viewing a historical day
   let dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
   if (dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10))) {
     let banner = document.createElement('div');

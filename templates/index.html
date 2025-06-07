@@ -71,7 +71,6 @@
     fetch('/db_status')
       .then(resp => resp.text())
       .then(txt => {
-        // Example: "The DB is 25.4 MB in size and contains 18 days worth of data"
         const sizeMatch = txt.match(/The DB is ([\d\.]+ (?:MB|GB))/i);
         const daysMatch = txt.match(/contains (\d+) days?/i);
         if (sizeMatch) document.getElementById('db-size').textContent = sizeMatch[1] + " in size";
