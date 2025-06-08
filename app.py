@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pytz
 import threading
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO
 
 app = Flask(__name__)
 CORS(app)
@@ -19,6 +20,7 @@ LOG_FILE = os.path.join(DATA_DIR, "daily.log.json")
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(DATA_DIR, "weatherlog.db")}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 class HourlyWeather(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -34,7 +36,6 @@ class HourlyWeather(db.Model):
             **json.loads(self.data_json)
         }
 
-# --- NEW: HourlySnapshot model for full dashboard snapshots ---
 class HourlySnapshot(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     iata = db.Column(db.String(4), index=True, nullable=False)
@@ -470,14 +471,14 @@ def periodic_ops_plan_refresh():
         import time
         time.sleep(600)
 
-# --- NEW: Background thread to archive hourly dashboard snapshots for all hubs ---
-def hourly_snapshot_job():
+def minute_snapshot_job():
     import time
     with app.app_context():
         while True:
             now = datetime.now()
             cur_date = now.strftime('%Y-%m-%d')
             cur_hour = now.hour
+            data_changed = False
             for hub in HUBS:
                 iata = hub["iata"]
                 weather_data = fetch_and_log_weather(iata)
@@ -499,21 +500,26 @@ def hourly_snapshot_job():
                         hour=cur_hour,
                         snapshot_json=json.dumps(snapshot)
                     ))
+                    data_changed = True
                 else:
-                    exists.snapshot_json = json.dumps(snapshot)
+                    prev = exists.snapshot_json
+                    new = json.dumps(snapshot)
+                    if prev != new:
+                        exists.snapshot_json = new
+                        data_changed = True
                 db.session.commit()
-            time_to_next_hour = 3600 - (datetime.now().minute * 60 + datetime.now().second)
-            time.sleep(time_to_next_hour)
+            if data_changed:
+                socketio.emit('dashboard_update', {'msg': 'updated'})
+            time_to_next_min = 60 - datetime.now().second
+            time.sleep(time_to_next_min)
 
-
-# --- NEW: API endpoint to retrieve archived hourly dashboard snapshots ---
 @app.route("/api/hourly-snapshots/<iata>/<date>")
 def api_hourly_snapshots(iata, date):
     rows = HourlySnapshot.query.filter_by(iata=iata.upper(), date=date).order_by(HourlySnapshot.hour).all()
     return jsonify([r.as_dict() for r in rows])
 
 threading.Thread(target=periodic_ops_plan_refresh, daemon=True).start()
-threading.Thread(target=hourly_snapshot_job, daemon=True).start()
+threading.Thread(target=minute_snapshot_job, daemon=True).start()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    socketio.run(app, debug=True)

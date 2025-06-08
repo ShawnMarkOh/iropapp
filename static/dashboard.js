@@ -339,7 +339,6 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
     document.getElementById('dashboard').innerHTML = dashHTML;
   }
 }
-
 function isFAAEventRelevant(event, hubIata) {
   if (!event || !event.desc) return false;
   const desc = event.desc.toUpperCase();
@@ -497,14 +496,7 @@ function showHourModal(block, base, dayLabel) {
   let modal = new bootstrap.Modal(document.getElementById('hourModal'));
   modal.show();
 }
-function scheduleHourlyRefresh() {
-  const now = new Date();
-  const msToNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
-  setTimeout(function() { window.location.reload(); }, msToNextHour + 1000);
-}
-setInterval(function() {
-    window.location.reload();
-}, 600000);
+
 document.addEventListener('DOMContentLoaded', async () => {
   HUBS = await getHubs();
   const groundstops = await fetchGroundStops();
@@ -518,8 +510,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     banner.innerHTML = "";
     banner.style.display = "none";
   }
-  loadDashboard();
-  scheduleHourlyRefresh();
+  await loadDashboard();
   const btn = document.getElementById('weatherHistoryBtn');
   if (btn) {
     btn.onclick = function() {
@@ -546,5 +537,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     banner.style.textAlign = 'center';
     banner.style.padding = '8px';
     document.body.insertBefore(banner, document.body.firstChild);
+  }
+
+  if (typeof io !== "undefined") {
+    const socket = io();
+    socket.on('dashboard_update', function(data) {
+      loadDashboard();
+    });
   }
 });

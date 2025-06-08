@@ -5,3 +5,5 @@ requests
 pytz
 beautifulsoup4
 flask_sqlalchemy
+flask-socketio
+eventlet
