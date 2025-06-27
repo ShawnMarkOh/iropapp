@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+instance/
+
+# Aider
+.aider*
+
+# Project specific
+data/
+logs/
+chroma_data/
+gemini_api_key.txt
+setup_project.py
+workspace.py
+node_modules/
+README.md

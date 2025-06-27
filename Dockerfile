@@ -18,5 +18,5 @@ COPY . /app
 # Expose port
 EXPOSE 8550
 
-# Run Gunicorn server.
-CMD ["gunicorn", "--bind", "0.0.0.0:8550", "app:app"]
+# Run Gunicorn server with eventlet worker for Socket.IO support.
+CMD ["gunicorn", "--worker-class", "eventlet", "-w", "1", "--bind", "0.0.0.0:8550", "app:app"]
