@@ -7,9 +7,11 @@ let groundStops = {};
 let groundDelays = {};
 let allDayBaseData = [[],[],[]]; // Store all data globally for lazy loading
 
-async function loadDashboard() {
+async function loadDashboard(isUpdate = false) {
   const dashboard = document.getElementById('dashboard');
-  dashboard.innerHTML = `<div class="text-center p-5 fs-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>Loading weather data for all bases...</div></div>`;
+  if (!isUpdate) {
+    dashboard.innerHTML = `<div class="text-center p-5 fs-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>Loading weather data for all bases...</div></div>`;
+  }
   
   let dailyBrief = [{}, {}, {}], dayLabels = [], allDone = 0;
   const dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
@@ -119,7 +121,9 @@ async function loadDashboard() {
 
         const groundStopData = groundStops[hub.iata] || null;
         const groundDelayData = groundDelays[hub.iata] || null;
+        
         let groundStopEndHour = -1;
+        let groundStopCrossesMidnight = false;
         if (groundStopData && groundStopData.end_time) {
             const timeStr = groundStopData.end_time;
             const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(am|pm)?/i);
@@ -129,17 +133,44 @@ async function loadDashboard() {
                 if (ampm === 'pm' && hour < 12) hour += 12;
                 if (ampm === 'am' && hour === 12) hour = 0;
                 groundStopEndHour = hour;
+
+                // A ground stop is active now. If its end hour is before the current hour, it must be for tomorrow.
+                if (highlightHour !== null && groundStopEndHour < highlightHour) {
+                    groundStopCrossesMidnight = true;
+                }
             }
         }
 
-        const {hourBlocks, percentHigh, percentPartial} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay, groundStopEndHour);
+        let effectiveGroundStopData = groundStopData;
+        if (groundStopData && groundStopEndHour !== -1) { // Only apply logic if there's an end time
+            if (dayIdx === 1 && !groundStopCrossesMidnight) {
+                effectiveGroundStopData = null;
+            } else if (dayIdx > 1) {
+                effectiveGroundStopData = null;
+            }
+        }
+
+        let groundStopHoursForThisDay = null;
+        if (effectiveGroundStopData && groundStopEndHour !== -1) {
+            if (dayIdx === 0 && highlightHour !== null) {
+                if (groundStopCrossesMidnight) {
+                    groundStopHoursForThisDay = { start: highlightHour, end: 23 };
+                } else {
+                    groundStopHoursForThisDay = { start: highlightHour, end: groundStopEndHour };
+                }
+            } else if (dayIdx === 1 && groundStopCrossesMidnight) {
+                groundStopHoursForThisDay = { start: 0, end: groundStopEndHour };
+            }
+        }
+
+        const {hourBlocks, percentHigh, percentPartial} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay, groundStopHoursForThisDay);
         let assessment = getDailyAssessment(percentHigh, percentPartial);
         
-        if (groundStopData) {
+        if (effectiveGroundStopData) {
             assessment.label = "🛑 ACTIVE IROP";
             assessment.class = "risk-high";
             assessment.summary = "Active IROP";
-        } else if (groundDelayData) {
+        } else if (groundDelayData && dayIdx === 0) {
             assessment.label = "DELAY PROGRAM";
             assessment.class = "risk-moderate";
             assessment.summary = "Active Delay";
@@ -167,7 +198,7 @@ async function loadDashboard() {
             }
         }
 
-        const card = { hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: groundStopData, groundDelay: groundDelayData, alerts: alerts };
+        const card = { hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: effectiveGroundStopData, groundDelay: (dayIdx > 0 ? null : groundDelayData), alerts: alerts };
         
         allDayBaseData[dayIdx].push(card);
         if (!dailyBrief[dayIdx][assessment.summary]) dailyBrief[dayIdx][assessment.summary] = [];
@@ -177,15 +208,19 @@ async function loadDashboard() {
       }
       allDone++;
       if (allDone === HUBS.length) {
-        renderDashboard(allDayBaseData, dayLabels, dailyBrief);
-        setupAccordionListeners();
+        renderDashboard(allDayBaseData, dayLabels, dailyBrief, isUpdate);
+        if (!isUpdate) {
+            setupAccordionListeners();
+        }
       }
     } catch (err) {
       console.error(`Failed to load data for ${hub.iata}:`, err);
       allDone++;
       if (allDone === HUBS.length) {
-        renderDashboard(allDayBaseData, dayLabels, dailyBrief);
-        setupAccordionListeners();
+        renderDashboard(allDayBaseData, dayLabels, dailyBrief, isUpdate);
+        if (!isUpdate) {
+            setupAccordionListeners();
+        }
       }
     }
   }
@@ -202,7 +237,7 @@ function setupAccordionListeners() {
     if (collapse1) {
         collapse1.addEventListener('show.bs.collapse', () => {
             if (!day1Loaded) {
-                renderDay(allDayBaseData[1], 'day-1-container');
+                renderDay(allDayBaseData[1], 'day-1-container', 1);
                 day1Loaded = true;
             }
         });
@@ -212,7 +247,7 @@ function setupAccordionListeners() {
     if (collapse2) {
         collapse2.addEventListener('show.bs.collapse', () => {
             if (!day2Loaded) {
-                renderDay(allDayBaseData[2], 'day-2-container');
+                renderDay(allDayBaseData[2], 'day-2-container', 2);
                 day2Loaded = true;
             }
         });
@@ -276,7 +311,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     socket.on('dashboard_update', async function(data) {
       console.log('Dashboard update received via websocket.');
       await updateAdvisories();
-      await loadDashboard();
+      await loadDashboard(true);
       await fetchDbStatus();
     });
   }

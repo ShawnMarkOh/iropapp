@@ -83,7 +83,7 @@ function renderBaseCard(card) {
   `;
 }
 
-function renderDay(dayData, containerId) {
+function renderDay(dayData, containerId, dayIdx) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
@@ -92,21 +92,35 @@ function renderDay(dayData, containerId) {
         return;
     }
 
-    const cardsHTML = dayData.map(card => `
-        <div class="col d-flex">
+    let grid = container.querySelector('.row');
+    if (!grid) {
+        grid = document.createElement('div');
+        grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 row-cols-xxl-6 g-4 justify-content-center';
+        container.innerHTML = '';
+        container.appendChild(grid);
+    }
+
+    // Build a new set of card elements in memory
+    const newCardElements = dayData.map(card => {
+        const cardWrapper = document.createElement('div');
+        cardWrapper.className = 'col d-flex';
+        cardWrapper.id = `card-${card.iata}-${dayIdx}`;
+        cardWrapper.innerHTML = `
             <div class="card h-100 w-100 ${card.groundStop ? 'ground-stop-active' : (card.groundDelay ? 'ground-delay-active' : '')}">
                 <div class="card-body p-3">
                     ${renderBaseCard(card)}
                 </div>
             </div>
-        </div>
-    `).join("");
+        `;
+        return cardWrapper;
+    });
 
-    container.innerHTML = `<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 row-cols-xxl-6 g-4 justify-content-center">${cardsHTML}</div>`;
+    // Replace the grid's children with the new set, which is more efficient than innerHTML
+    grid.replaceChildren(...newCardElements);
 }
 
 
-function renderDashboard(allDayBase, dayLabels, dailyBrief) {
+function renderDashboard(allDayBase, dayLabels, dailyBrief, isUpdate = false) {
     const dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
     const isArchive = dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0, 10));
 
@@ -128,49 +142,63 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
     document.getElementById('briefing-content').innerHTML = briefingHTML;
 
     const dashboardEl = document.getElementById('dashboard');
-    let dashHTML = "";
+    
+    // Only render the main structure if it's not an update or if it's not there yet.
+    if (!isUpdate || !dashboardEl.querySelector('.day-header')) {
+        let dashHTML = "";
 
-    // Day 0 (Today) - Always rendered
-    if (allDayBase[0] && allDayBase[0].length > 0) {
-        dashHTML += `<div class="day-header">${dayLabels[0]}</div>`;
-        dashHTML += `<div id="day-0-container"></div>`; // Container for cards
-    } else {
-        dashHTML += `<div class="day-header">${dayLabels[0] || 'Today'}</div><div class="text-center p-5 fs-4">No data available for today.</div>`;
-    }
+        // Day 0 (Today) - Always rendered
+        if (allDayBase[0] && allDayBase[0].length > 0) {
+            dashHTML += `<div class="day-header">${dayLabels[0]}</div>`;
+            dashHTML += `<div id="day-0-container"></div>`; // Container for cards
+        } else {
+            dashHTML += `<div class="day-header">${dayLabels[0] || 'Today'}</div><div class="text-center p-5 fs-4">No data available for today.</div>`;
+        }
 
-    // Days 1 & 2 (Tomorrow, Day After) - Render as accordions if not in archive mode
-    if (!isArchive) {
-        dashHTML += `<div class="accordion mt-4" id="future-days-accordion">`;
-        for (let dayIdx = 1; dayIdx < 3; ++dayIdx) {
-            if (dayLabels[dayIdx]) {
-                dashHTML += `
-                    <div class="accordion-item">
-                        <h2 class="accordion-header" id="heading-day-${dayIdx}">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-day-${dayIdx}" aria-expanded="false" aria-controls="collapse-day-${dayIdx}">
-                                ${dayLabels[dayIdx]}
-                            </button>
-                        </h2>
-                        <div id="collapse-day-${dayIdx}" class="accordion-collapse collapse" aria-labelledby="heading-day-${dayIdx}" data-bs-parent="#future-days-accordion">
-                            <div class="accordion-body" id="day-${dayIdx}-container">
-                                <div class="text-center p-4">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
+        // Days 1 & 2 (Tomorrow, Day After) - Render as accordions if not in archive mode
+        if (!isArchive) {
+            dashHTML += `<div class="accordion mt-4" id="future-days-accordion">`;
+            for (let dayIdx = 1; dayIdx < 3; ++dayIdx) {
+                if (dayLabels[dayIdx]) {
+                    dashHTML += `
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading-day-${dayIdx}">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-day-${dayIdx}" aria-expanded="false" aria-controls="collapse-day-${dayIdx}">
+                                    ${dayLabels[dayIdx]}
+                                </button>
+                            </h2>
+                            <div id="collapse-day-${dayIdx}" class="accordion-collapse collapse" aria-labelledby="heading-day-${dayIdx}" data-bs-parent="#future-days-accordion">
+                                <div class="accordion-body" id="day-${dayIdx}-container">
+                                    <div class="text-center p-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             }
+            dashHTML += `</div>`;
         }
-        dashHTML += `</div>`;
+        
+        dashboardEl.innerHTML = dashHTML;
     }
-    
-    dashboardEl.innerHTML = dashHTML;
 
     // Now, render the cards for Today into its container
     if (allDayBase[0] && allDayBase[0].length > 0) {
-       renderDay(allDayBase[0], 'day-0-container');
+       renderDay(allDayBase[0], 'day-0-container', 0);
+    }
+
+    // If it's an update, also re-render content for any open accordions
+    if (isUpdate && !isArchive) {
+        for (let dayIdx = 1; dayIdx < 3; ++dayIdx) {
+            const collapseEl = document.getElementById(`collapse-day-${dayIdx}`);
+            if (collapseEl && collapseEl.classList.contains('show')) {
+                renderDay(allDayBase[dayIdx], `day-${dayIdx}-container`, dayIdx);
+            }
+        }
     }
 }
 

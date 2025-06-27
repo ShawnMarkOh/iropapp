@@ -1,4 +1,4 @@
-function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, ymdStr, runways, faaEventsForDay, groundStopEndHour = -1) {
+function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, ymdStr, runways, faaEventsForDay, groundStopHours = null) {
   let hourData = {};
   for (const period of hourlyPeriods) {
     const d = new Date(period.startTime);
@@ -21,6 +21,7 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   }
   let hourBlocks = [];
   let rawRisks = [];
+  let riskObjects = []; // Store full risk objects for later analysis
   for (let h = 0; h < 24; h++) {
     let period = hourData[h];
     let riskObj, txt, shortF="", detailedF="", windRisk=null, windTxt="", spdKts=0, spdMPH=0, dir="", temp="";
@@ -56,10 +57,11 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       txt = "No data"; shortF = ""; detailedF = ""; temp = "";
     }
     rawRisks.push(riskObj.risk);
+    riskObjects.push(riskObj); // Populate the array of risk objects
 
     let isGroundStopHour = false;
-    if (groundStopEndHour !== -1 && highlightHour !== null) {
-        if (h >= highlightHour && h <= groundStopEndHour) {
+    if (groundStopHours) {
+        if (h >= groundStopHours.start && h <= groundStopHours.end) {
             isGroundStopHour = true;
         }
     }
@@ -108,7 +110,23 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
   }
   for (let h=0; h<24; h++) {
     if ((rawRisks[h]==="high" || rawRisks[h]==="partial") && !highMark[h] && !partialMark[h]) {
-      hourBlocks[h].hourClass += " hour-brief"; hourBlocks[h].isBrief = true;
+      // This is a potential brief event. Check neighbors for thunderstorms.
+      let isTrulyBrief = true;
+      
+      // Check previous hour for any thunderstorm risk
+      if (h > 0 && riskObjects[h-1].key === "Thunder") {
+        isTrulyBrief = false;
+      }
+      
+      // Check next hour for any thunderstorm risk
+      if (h < 23 && riskObjects[h+1].key === "Thunder") {
+        isTrulyBrief = false;
+      }
+
+      if (isTrulyBrief) {
+        hourBlocks[h].hourClass += " hour-brief";
+        hourBlocks[h].isBrief = true;
+      }
     }
   }
   return {hourBlocks,percentHigh: total ? Math.round((countHigh/total)*100) : 0,percentPartial: total ? Math.round((countPartial/total)*100) : 0,total};
