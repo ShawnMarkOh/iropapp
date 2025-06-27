@@ -1,3 +1,13 @@
+// Placeholders for globals and functions not defined in the original script
+let HUBS = [];
+window.FAA_EVENT_DEFINITIONS = {};
+window.FAA_LITERAL_TRANSLATIONS = {};
+function translateFAAString(s) {
+    if (!s) return "N/A";
+    // In a real scenario, this would look up definitions. For now, it just returns the string.
+    return s;
+}
+
 let FAA_EVENTS = {};
 let groundstopHubs = {};
 const windDirs = {N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5, S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5};
@@ -66,11 +76,12 @@ async function fetchSnapshots(iata, date) {
 }
 async function loadDashboard() {
   const dashboard = document.getElementById('dashboard');
-  dashboard.innerHTML = '<div style="font-size:1.2rem; padding:22px;">Loading weather data for all bases...</div>';
+  dashboard.innerHTML = '<div class="text-center p-5 fs-4">Loading weather data for all bases...</div>';
   let allDayBase = [[],[],[]], dailyBrief = [{}, {}, {}], dayLabels = [], allDone = 0;
   const dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-  const baseDate = dateMatch ? new Date(dateMatch[1] + "T00:00:00") : new Date();
+  const baseDate = dateMatch ? new Date(dateMatch[1] + "T12:00:00Z") : new Date(); // Use UTC to avoid timezone shifts
   const isArchive = dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10));
+  
   for (const hub of HUBS) {
     try {
       let wx;
@@ -127,10 +138,10 @@ async function loadDashboard() {
         }));
         if (!dayLabels[dayIdx] && period) dayLabels[dayIdx] = (period.name || "Day") + " (" + formatLocalDateOnly(period.startTime, hub.tz) + ")";
         else if (!dayLabels[dayIdx]) dayLabels[dayIdx] = formatLocalDateOnly(dayDate, hub.tz);
-        const highlightHour = (ymd === baseDate.toISOString().slice(0,10)) ? baseDate.getHours() : null;
+        const highlightHour = (ymd === new Date().toLocaleDateString('sv').slice(0,10)) ? new Date().getHours() : null;
         let faaEventsForDay = (FAA_EVENTS[hub.iata]||[]).filter(e => {
           if (e.local_hour !== undefined && e.local_hour !== null) {
-            let eventDate = new Date(baseDate.toLocaleString("en-US", {timeZone: hub.tz}));
+            let eventDate = new Date(dayDate.toLocaleString("en-US", {timeZone: hub.tz}));
             eventDate.setHours(e.local_hour,0,0,0);
             const eymd = eventDate.getFullYear() + "-" + String(eventDate.getMonth()+1).padStart(2,"0") + "-" + String(eventDate.getDate()).padStart(2,"0");
             return eymd === ymd;
@@ -163,6 +174,7 @@ async function loadDashboard() {
       allDone++;
       if (allDone === HUBS.length) renderDashboard(allDayBase, dayLabels, dailyBrief);
     } catch (err) {
+      console.error(`Failed to load data for ${hub.iata}:`, err);
       allDone++;
       if (allDone === HUBS.length) renderDashboard(allDayBase, dayLabels, dailyBrief);
     }
@@ -205,24 +217,18 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       if (period.temperature !== undefined && period.temperatureUnit) {
         temp = `${period.temperature}°${period.temperatureUnit}`;
       }
-      let windRiskObj = getHourWindRisk(spdKts, 0);
       runwayStatus = analyzeRunwaySafety(runways, dir, spdKts);
-      let crossMax = Math.max(...runwayStatus.map(rw=>rw.cross));
-      let crossRiskObj = getHourWindRisk(spdKts, crossMax);
-      if (windRiskObj && (!riskObj || windRiskObj.risk==="high" || windRiskObj.risk==="wind-high" || windRiskObj.risk==="wind-partial")) {
-        windRisk = windRiskObj.risk; windTxt = windRiskObj.txt;
-        if (windRiskObj.risk==="high") riskObj = { risk:"high", key:"Wind", hourClass:"hour-wind" };
-        else if (windRiskObj.risk==="wind-high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-high" };
-        else if (windRiskObj.risk==="wind-partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-partial" };
-        else if (windRiskObj.risk==="partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind" };
+      let crossMax = Math.max(0, ...runwayStatus.map(rw=>rw.cross));
+      let windRiskObj = getHourWindRisk(spdKts, crossMax);
+
+      if (windRiskObj) {
+          windRisk = windRiskObj.risk;
+          windTxt = windRiskObj.txt;
+          if (windRiskObj.risk === "high" || (windRiskObj.risk === "wind-high" && riskObj.risk !== "high") || (windRiskObj.risk === "wind-partial" && riskObj.risk === "clear")) {
+              riskObj = { risk: windRiskObj.risk, key: "Wind", hourClass: windRiskObj.class };
+          }
       }
-      if (crossRiskObj && (!riskObj || crossRiskObj.risk==="high" || crossRiskObj.risk==="wind-high" || crossRiskObj.risk==="wind-partial")) {
-        windRisk = crossRiskObj.risk; windTxt = crossRiskObj.txt;
-        if (crossRiskObj.risk==="high") riskObj = { risk:"high", key:"Wind", hourClass:"hour-wind" };
-        else if (crossRiskObj.risk==="wind-high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-high" };
-        else if (crossRiskObj.risk==="wind-partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind-partial" };
-        else if (crossRiskObj.risk==="partial" && riskObj.risk!=="high") riskObj = { risk:"partial", key:"Wind", hourClass:"hour-wind" };
-      }
+
     } else {
       riskObj = { risk: "nodata", key: null, hourClass: "hour-nodata" };
       txt = "No data"; shortF = ""; detailedF = ""; temp = "";
@@ -282,6 +288,7 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
   let briefingHTML = "";
   ["Today", "Tomorrow", "The day after"].forEach((when, idx) => {
     let b = dailyBrief[idx], txts = [];
+    if (!b || Object.keys(b).length === 0) return;
     if (b["High IROPS risk"] && b["High IROPS risk"].length) {
       txts.push(`<b>High IROPS risk</b> at <b>${b["High IROPS risk"].join(", ")}</b>`);
     }
@@ -297,17 +304,21 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
     if (b["No Weather Risk"] && b["No Weather Risk"].length) {
       txts.push(`No weather risk expected at <b>${b["No Weather Risk"].join(", ")}</b>`);
     }
-    let detailTxt = b.details && b.details.length ? `<div style="font-size:1rem;color:#7b6000; margin-top:2px;">Details: ${b.details.join("; ")}</div>` : "";
+    let detailTxt = b.details && b.details.length ? `<div style="font-size:1rem;color:#c0a060; margin-top:2px;">Details: ${b.details.join("; ")}</div>` : "";
     briefingHTML += `<div style="margin-bottom:8px;"><b>${when}'s outlook:</b> ${txts.length ? txts.join(", ") : "No weather risk expected."}${detailTxt}</div>`;
   });
-  document.getElementById('briefing-summary').innerHTML = briefingHTML;
+  document.getElementById('briefing-content').innerHTML = briefingHTML;
 
-  if (isArchive) {
-    let dashHTML = `<div class="day-header">${dayLabels[0]}</div>`;
+  let dashHTML = "";
+  const daysToRender = isArchive ? 1 : 3;
+
+  for (let dayIdx=0; dayIdx<daysToRender; ++dayIdx) {
+    if (!allDayBase[dayIdx] || allDayBase[dayIdx].length === 0) continue;
+    dashHTML += `<div class="day-header">${dayLabels[dayIdx]}</div>`;
     dashHTML += `<div class="container-fluid px-2">
-      <div class="row g-3 justify-content-center">
-        ${allDayBase[0].map(card => `
-          <div class="col-12 col-sm-6 col-lg-2 d-flex">
+      <div class="row g-3">
+        ${allDayBase[dayIdx].map(card => `
+          <div class="col-12 col-md-6 col-lg-4 col-xl-2 d-flex">
             <div class="card h-100 w-100 shadow-sm">
               <div class="card-body p-2 p-lg-3">
                 ${renderBaseCard(card)}
@@ -317,27 +328,8 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief) {
         `).join("")}
       </div>
     </div>`;
-    document.getElementById('dashboard').innerHTML = dashHTML;
-  } else {
-    let dashHTML = "";
-    for (let dayIdx=0; dayIdx<3; ++dayIdx) {
-      dashHTML += `<div class="day-header">${dayLabels[dayIdx]}</div>`;
-      dashHTML += `<div class="container-fluid px-2">
-        <div class="row g-3 justify-content-center">
-          ${allDayBase[dayIdx].map(card => `
-            <div class="col-12 col-sm-6 col-lg-2 d-flex">
-              <div class="card h-100 w-100 shadow-sm">
-                <div class="card-body p-2 p-lg-3">
-                  ${renderBaseCard(card)}
-                </div>
-              </div>
-            </div>
-          `).join("")}
-        </div>
-      </div>`;
-    }
-    document.getElementById('dashboard').innerHTML = dashHTML;
   }
+  document.getElementById('dashboard').innerHTML = dashHTML || '<div class="text-center p-5 fs-4">No data available for the selected date.</div>';
 }
 function isFAAEventRelevant(event, hubIata) {
   if (!event || !event.desc) return false;
@@ -353,20 +345,19 @@ function renderBaseCard(card) {
     <div class="base-title mb-1">${card.name} (${card.iata})<span style="font-size:.93rem;font-weight:400;color:#6a788a;"> – ${card.city}</span></div>
     <div class="short-forecast mb-1">${card.shortForecast}</div>
     <div style="font-size:0.97rem;margin-bottom:4px;">Temp: ${card.temp}</div>
-    <div class="base-details"><b>Wind:</b> ${card.wind}</div>
-    <details>
+    <div class="base-details mb-2"><b>Wind:</b> ${card.wind}</div>
+    <details class="mb-2">
       <summary style="color:#3463c4;font-size:0.93rem;cursor:pointer;">Detailed Forecast</summary>
-      <div style="font-size:0.94rem;">${card.detailedForecast}</div>
+      <div style="font-size:0.94rem;color:#ccc;margin-top:5px;">${card.detailedForecast}</div>
     </details>
-    <div class="${card.riskClass} mb-1" style="margin-bottom:5px;">
+    <div class="${card.riskClass} mb-2" style="margin-bottom:5px;">
       ${card.riskLabel}
-      <span style="font-weight:normal;color:#606868;font-size:0.97rem;display:block;">
+      <span style="font-weight:normal;color:#eee;font-size:0.97rem;display:block;">
         Thunderstorm/severe wx hours: <b>${card.percentHigh}%</b><br>
         Other hazard hours: <b>${card.percentPartial}%</b>
       </span>
     </div>
     <div class="hourly-breakdown mb-1">
-      <span class="hourly-label">24h risk:</span>
       ${card.hourBlocks.map(h => {
         const relevantFAAEvents = (h.faaEvents || []).filter(ev => isFAAEventRelevant(ev, card.iata));
         const exclamations = relevantFAAEvents.length
@@ -375,15 +366,15 @@ function renderBaseCard(card) {
                  .map(k => window.FAA_LITERAL_TRANSLATIONS[k]).join(', ') || translateFAAString(ev.desc))
             ).join('; ') + '">' + '❗'.repeat(relevantFAAEvents.length) + '</span>'
           : '';
-        return `<span class="hour-cell ${h.hourClass}" 
+        return `<div class="hour-cell ${h.hourClass}" 
           title="${h.hour}:00 - ${translateFAAString(h.txt)}${h.temp ? ', ' + h.temp : ''}${h.windTxt ? ' | ' + h.windTxt : ''}${h.windKts>0?` | Wind: ${h.windKts.toFixed(0)}kts (${h.windMPH.toFixed(0)}mph)`:""}"
-          onclick='${h.risk==="nodata" ? "" : `showHourModal(${JSON.stringify(h).replace(/'/g,"&#39;")},${JSON.stringify(card.hub).replace(/'/g,"&#39;")},${JSON.stringify(card.label).replace(/'/g,"&#39;")})`}'
-        >${String(h.hour).padStart(2,0)}:00${exclamations}</span>`;
+          onclick='${h.risk==="nodata" ? "" : `showHourModal(${JSON.stringify(h).replace(/'/g,"'")},${JSON.stringify(card.hub).replace(/'/g,"'")})`}'
+        >${String(h.hour).padStart(2,'0')}${exclamations}</div>`;
       }).join("")}
     </div>
   `;
 }
-function showHourModal(block, base, dayLabel) {
+function showHourModal(block, base) {
   const modalLabel = document.getElementById('hourModalLabel');
   const modalBody = document.getElementById('hourModalBody');
   let riskStr = '';
@@ -396,42 +387,22 @@ function showHourModal(block, base, dayLabel) {
   else if (block.riskClass === "nodata") riskStr = `<span class="hour-nodata">No data</span>`;
   else if (block.riskClass === "wind") riskStr = `<span class="risk-wind">Wind risk</span>`;
   else riskStr = `<span class="risk-normal">No Weather Risk</span>`;
-  let closedRunways = [];
-  if (window.LATEST_SIRS && window.LATEST_SIRS.length) {
-    closedRunways = window.LATEST_SIRS.map(s => s.runway.replace(/\s/g,'').toUpperCase());
-  }
-  let terminalConstraints = [];
-  if (window.LATEST_CONSTRAINTS && window.LATEST_CONSTRAINTS.length) {
-    terminalConstraints = window.LATEST_CONSTRAINTS;
-  }
+  let closedRunways = (window.LATEST_SIRS || []).map(s => s.runway.replace(/\s/g,'').toUpperCase());
+  let terminalConstraints = window.LATEST_CONSTRAINTS || [];
+  
   let runwayStatusHTML = "";
   if (block.runways && block.runways.length > 0) {
     runwayStatusHTML = `
-      <table class="modal-table runway-table mt-2">
-        <thead>
-          <tr>
-            <th>Runway</th>
-            <th>Length (ft)</th>
-            <th>Crosswind (kts)</th>
-            <th>Status</th>
-          </tr>
-        </thead>
+      <h5 class="mt-3">Runway Status</h5>
+      <table class="modal-table runway-table">
+        <thead><tr><th>Runway</th><th>Length (ft)</th><th>Crosswind (kts)</th><th>Status</th></tr></thead>
         <tbody>
           ${block.runways.map(rw => {
             let rwName = rw.label.replace(/\s/g,'').toUpperCase();
             let isClosed = closedRunways.includes(rwName);
-            let status = "";
-            let className = "";
-            if (isClosed) {
-              status = "CLOSED";
-              className = "runway-unsafe";
-            } else if (rw.len >= 5360) {
-              status = rw.safe ? "SAFE" : (rw.warning ? rw.warning : "UNSAFE");
-              className = rw.safe ? "runway-safe" : "runway-unsafe";
-            } else if (rw.len >= 5040) {
-              status = rw.safe ? "SAFE (CRJ700)" : (rw.warning ? rw.warning.replace(/^SAFE/, "SAFE (CRJ700)").replace(/^UNSAFE/, "UNSAFE (CRJ700)") : "UNSAFE (CRJ700)");
-              className = rw.safe ? "runway-crj700only" : "runway-unsafe";
-            }
+            let status = rw.warning;
+            let className = rw.className;
+            if (isClosed) { status = "CLOSED"; className = "runway-unsafe"; }
             return `<tr>
                 <td>${rw.label}</td>
                 <td>${rw.len}</td>
@@ -441,16 +412,16 @@ function showHourModal(block, base, dayLabel) {
           }).join("")}
         </tbody>
       </table>
-      <div class="mt-2" style="font-size:0.97em;color:#506080;">
-        <b>Legend:</b> <span class="runway-safe">SAFE</span> = Meets CRJ900 &amp; CRJ700 requirements. <span class="runway-crj700only">SAFE (CRJ700)</span> = Only CRJ700, not CRJ900. <span class="runway-unsafe">CLOSED/UNSAFE</span> = Not available or unsafe.
+      <div class="mt-2" style="font-size:0.9em;color:var(--dim-text);">
+        <b>Legend:</b> <span class="runway-safe">SAFE</span> = CRJ900/700 OK. <span class="runway-crj700only">SAFE (CRJ700)</span> = CRJ700 only. <span class="runway-unsafe">CLOSED/UNSAFE</span> = Unsafe/Unavailable.
       </div>
     `;
   }
   let faaEventsHTML = block.faaEvents && block.faaEvents.length > 0 ? block.faaEvents.map(ev =>
     `<div class="faa-event-summary"><b>FAA Event:</b> ${translateFAAString(ev.desc)}<br>
-      <span style="color:#222;">
+      <span style="color:#ddd;">
       <b>Local Hour:</b> ${String(block.hour).padStart(2,"0")}:00<br>
-      <b>FAA Event Time (Zulu):</b> ${ev.zulu_time ? ev.zulu_time : "N/A"}<br>
+      <b>FAA Event Time (Zulu):</b> ${ev.zulu_time || "N/A"}<br>
       <b>When:</b> ${ev.when || "N/A"}
       </span>
     </div>`
@@ -468,10 +439,9 @@ function showHourModal(block, base, dayLabel) {
   }
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
-    <div class="modal-section">
+      <h5>Weather Details</h5>
       <table class="modal-table">
-        <tr><th>Date</th><td>${block.ymd}</td></tr>
-        <tr><th>Hour</th><td>${String(block.hour).padStart(2, "0")}:00</td></tr>
+        <tr><th>Date & Hour</th><td>${block.ymd} @ ${String(block.hour).padStart(2, "0")}:00 Local</td></tr>
         <tr><th>Risk</th><td>${riskStr}</td></tr>
         ${block.temp ? `<tr><th>Temperature</th><td>${block.temp}</td></tr>` : ""}
         ${block.windTxt ? `<tr><th>Wind Hazard</th><td>${block.windTxt}</td></tr>` : ""}
@@ -479,19 +449,11 @@ function showHourModal(block, base, dayLabel) {
         <tr><th>Short Forecast</th><td>${translateFAAString(block.txt) || "No data"}</td></tr>
         ${block.detailedF ? `<tr><th>Detailed Forecast</th><td>${block.detailedF}</td></tr>` : ""}
       </table>
-    </div>
-    <hr>
-    <div class="modal-section">
       ${runwayStatusHTML}
-    </div>
-    <hr>
-    <div class="modal-section">
-      ${faaEventsHTML}
-      ${constraintsHTML}
-    </div>
-    <div style="margin-top:14px; color:#777; font-size:.95rem;">
-      <em>“No Weather Risk” means no thunderstorms or weather hazards in the forecast. Does <u>not</u> guarantee VFR or IFR flight conditions.</em>
-    </div>
+      <div class="mt-3">${faaEventsHTML}${constraintsHTML}</div>
+      <div style="margin-top:14px; color:var(--dim-text); font-size:.95rem;">
+        <em>“No Weather Risk” means no thunderstorms or weather hazards in the forecast. Does <u>not</u> guarantee VFR or IFR flight conditions.</em>
+      </div>
   `;
   let modal = new bootstrap.Modal(document.getElementById('hourModal'));
   modal.show();
@@ -505,43 +467,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   let banner = document.getElementById('groundstop-banner');
   if (stopped.length > 0) {
     banner.innerHTML = `⚠️ <b>IMMEDIATE IROPS:</b> <span style="font-weight:600;">${stopped.join(", ")}</span> ground stop active. <span style="font-size:1rem;">${stopped.map(iata=>groundstops[iata]).join("; ")}</span>`;
-    banner.style.display = "";
+    banner.style.display = "block";
   } else {
-    banner.innerHTML = "";
     banner.style.display = "none";
   }
   await loadDashboard();
-  const btn = document.getElementById('weatherHistoryBtn');
-  if (btn) {
-    btn.onclick = function() {
-      let modal = new bootstrap.Modal(document.getElementById('dateModal'));
-      modal.show();
-    };
-  }
-  const pickDateBtn = document.getElementById('pickDateBtn');
-  if (pickDateBtn) {
-    pickDateBtn.onclick = function() {
-      const picker = document.getElementById('datePicker');
-      if (picker && picker.value) {
-        window.location = `/?date=${picker.value}`;
-      }
+  
+  document.getElementById('weatherHistoryBtn').onclick = function() {
+    let modal = new bootstrap.Modal(document.getElementById('dateModal'));
+    modal.show();
+  };
+  
+  document.getElementById('pickDateBtn').onclick = function() {
+    const picker = document.getElementById('datePicker');
+    if (picker && picker.value) {
+      window.location = `/?date=${picker.value}`;
     }
   }
+  
   let dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
   if (dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10))) {
-    let banner = document.createElement('div');
-    banner.innerHTML = `<b>Viewing archived weather for ${dateMatch[1]}</b>`;
-    banner.style.background = '#ffc';
-    banner.style.color = '#b36a00';
-    banner.style.fontSize = '1.15rem';
-    banner.style.textAlign = 'center';
-    banner.style.padding = '8px';
-    document.body.insertBefore(banner, document.body.firstChild);
+    let bannerContainer = document.getElementById('archive-banner-container');
+    bannerContainer.innerHTML = `<div class="archive-banner">Viewing archived weather for ${dateMatch[1]}</div>`;
   }
 
   if (typeof io !== "undefined") {
     const socket = io();
     socket.on('dashboard_update', function(data) {
+      console.log('Dashboard update received via websocket.');
       loadDashboard();
     });
   }

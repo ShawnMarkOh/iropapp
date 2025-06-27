@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - IROPS Dashboard</title>
+    <link rel="icon" href="/static/iropfavicon.png" type="image/png">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="/static/stylesheet.css">
+    <style>
+        .api-endpoint {
+            background-color: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .api-endpoint h3 {
+            color: var(--primary-color);
+        }
+        .api-endpoint code {
+            background-color: var(--bs-body-bg);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+        }
+        .data-preview {
+            background-color: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .data-preview pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="/">
+                <img src="/static/iropfavicon.png" alt="Logo" width="30" height="30" class="d-inline-block align-text-top me-2">
+                IROPS Dashboard
+            </a>
+            <div class="d-flex align-items-center">
+                <div class="dropdown me-2">
+                    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                        Menu
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                        <li><a class="dropdown-item" href="/">Dashboard</a></li>
+                        <li><a class="dropdown-item" href="/calendar">Calendar View</a></li>
+                        <li><a class="dropdown-item" href="/api-docs">API Details</a></li>
+                    </ul>
+                </div>
+                <div class="theme-toggler" id="theme-toggler" title="Toggle light/dark theme">
+                    <svg class="theme-icon-light" xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" class="bi bi-sun-fill" viewBox="0 0 16 16"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707z"/></svg>
+                    <svg class="theme-icon-dark" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-moon-stars-fill" viewBox="0 0 16 16"><path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/><path d="M10.794 3.148a.217.217 0 0 1 .412 0l.387 1.162h1.212a.217.217 0 0 1 .162.321l-.988.717.387 1.162a.217.217 0 0 1-.321.242l-.988-.717-.988.717a.217.217 0 0 1-.321-.242l.387-1.162-.988-.717a.217.217 0 0 1 .162-.321h1.212l.387-1.162zM13.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a.774.774 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a.774.774 0 0 0-.732-.732l-.774-.258a.145.145 0 0 1 0-.274l.774.258c.346-.115.617-.386.732-.732L13.863.1z"/></svg>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container my-4">
+        <h1 class="mb-4">API Documentation</h1>
+
+        <div class="api-endpoint">
+            <h3>Get Hubs</h3>
+            <p>Returns a list of all airport hubs configured in the application.</p>
+            <p><strong>Endpoint:</strong> <code>GET /api/hubs</code></p>
+            <p><strong>Source:</strong> Internal application configuration.</p>
+            <p><strong>Success Response (200):</strong> A JSON array of hub objects.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#hubs-preview" aria-expanded="false" aria-controls="hubs-preview" id="fetch-hubs">
+                Show Live Data
+            </button>
+            <div class="collapse mt-3" id="hubs-preview">
+                <div class="data-preview p-3">
+                    <pre><code>Click the button to load data...</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-endpoint">
+            <h3>Get Weather Data</h3>
+            <p>Returns weather data for a specific hub. For the current day, it fetches live data. For past dates, it returns archived data.</p>
+            <p><strong>Endpoint:</strong> <code>GET /api/weather/&lt;iata&gt;</code></p>
+            <p><strong>Source:</strong> <a href="https://www.weather.gov/documentation/services-web-api" target="_blank" rel="noopener noreferrer">National Weather Service (NWS) API</a> and <a href="https://nasstatus.faa.gov/" target="_blank" rel="noopener noreferrer">FAA National Airspace System Status</a>.</p>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+                <li><code>iata</code> (string, required): The IATA code of the hub (e.g., CLT, DFW).</li>
+                <li><code>date</code> (string, optional): A date in YYYY-MM-DD format to retrieve archived data.</li>
+            </ul>
+            <p><strong>Success Response (200):</strong> A JSON object containing hourly and daily forecasts, timezone, and FAA data.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#weather-preview" aria-expanded="false" aria-controls="weather-preview" id="fetch-weather">
+                Show Live Data for CLT
+            </button>
+            <div class="collapse mt-3" id="weather-preview">
+                <div class="data-preview p-3">
+                    <pre><code>Click the button to load data...</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-endpoint">
+            <h3>Get Hourly Snapshots</h3>
+            <p>Returns all hourly data snapshots for a given hub and date from the archive.</p>
+            <p><strong>Endpoint:</strong> <code>GET /api/hourly-snapshots/&lt;iata&gt;/&lt;date&gt;</code></p>
+            <p><strong>Source:</strong> Internal application database archive. Data is originally sourced from NWS and FAA APIs.</p>
+            <p><strong>Parameters:</strong></p>
+            <ul>
+                <li><code>iata</code> (string, required): The IATA code of the hub.</li>
+                <li><code>date</code> (string, required): A date in YYYY-MM-DD format.</li>
+            </ul>
+            <p><strong>Success Response (200):</strong> A JSON array of snapshot objects for each hour.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#snapshots-preview" aria-expanded="false" aria-controls="snapshots-preview" id="fetch-snapshots">
+                Show Example Snapshot Data
+            </button>
+            <div class="collapse mt-3" id="snapshots-preview">
+                <div class="data-preview p-3">
+                    <pre><code>Click the button to load data...</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-endpoint">
+            <h3>Get Ground Stops</h3>
+            <p>Returns active ground stops for all hubs from the FAA.</p>
+            <p><strong>Endpoint:</strong> <code>GET /api/groundstops</code></p>
+            <p><strong>Source:</strong> <a href="https://nasstatus.faa.gov/" target="_blank" rel="noopener noreferrer">FAA National Airspace System Status API</a>.</p>
+            <p><strong>Success Response (200):</strong> A JSON object where keys are IATA codes and values are the reason for the ground stop.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#groundstops-preview" aria-expanded="false" aria-controls="groundstops-preview" id="fetch-groundstops">
+                Show Live Data
+            </button>
+            <div class="collapse mt-3" id="groundstops-preview">
+                <div class="data-preview p-3">
+                    <pre><code>Click the button to load data...</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-endpoint">
+            <h3>Get All Advisories</h3>
+            <p>Returns all advisories (ground stops, delays) for all hubs from the FAA.</p>
+            <p><strong>Endpoint:</strong> <code>GET /api/advisories</code></p>
+            <p><strong>Source:</strong> <a href="https://nasstatus.faa.gov/" target="_blank" rel="noopener noreferrer">FAA National Airspace System Status API</a>.</p>
+            <p><strong>Success Response (200):</strong> A JSON object where keys are IATA codes and values are arrays of advisory objects.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#advisories-preview" aria-expanded="false" aria-controls="advisories-preview" id="fetch-advisories">
+                Show Live Data
+            </button>
+            <div class="collapse mt-3" id="advisories-preview">
+                <div class="data-preview p-3">
+                    <pre><code>Click the button to load data...</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="api-endpoint">
+            <h3>Get Available Archive Dates</h3>
+            <p>Returns a list of all dates for which there is archived data available.</p>
+            <p><strong>Endpoint:</strong> <code>GET /api/archive-dates</code></p>
+            <p><strong>Source:</strong> Internal application database archive.</p>
+            <p><strong>Success Response (200):</strong> A JSON array of date strings in YYYY-MM-DD format.</p>
+            <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#archive-dates-preview" aria-expanded="false" aria-controls="archive-dates-preview" id="fetch-archive-dates">
+                Show Live Data
+            </button>
+            <div class="collapse mt-3" id="archive-dates-preview">
+                <div class="data-preview p-3">
+                    <pre><code>Click the button to load data...</code></pre>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- App Scripts -->
+    <script src="/static/theme.js"></script>
+    <!-- Custom API Docs Script -->
+    <script src="/static/api_docs.js"></script>
+</body>
+</html>

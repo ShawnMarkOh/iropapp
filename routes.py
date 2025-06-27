@@ -2,9 +2,7 @@
 
 import os
 import pytz
-import requests
 from datetime import datetime
-from xml.etree import ElementTree
 
 from flask import jsonify, render_template, send_from_directory, request
 
@@ -16,6 +14,14 @@ def init_routes(app):
     @app.route("/")
     def dashboard():
         return render_template("index.html")
+
+    @app.route("/calendar")
+    def calendar_view():
+        return render_template("calendar.html")
+
+    @app.route("/api-docs")
+    def api_docs():
+        return render_template("api_docs.html")
 
     @app.route("/api/hubs")
     def hubs_api():
@@ -46,23 +52,27 @@ def init_routes(app):
         data = services.fetch_and_log_weather(iata) if is_today else None
 
         result_hourly = []
-        if is_today and data:
+        if is_today: # Corrected line: removed trailing 'and'
             now_dt = datetime.now(tz)
             seen = set()
-            for period in data["hourly"]:
-                dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
-                key = period["startTime"]
-                if dt <= now_dt and key in logged_by_time:
-                    result_hourly.append(logged_by_time[key])
-                    seen.add(key)
-                else:
-                    result_hourly.append(period)
-                    seen.add(key)
+            # Ensure data is not None and has "hourly" key before trying to iterate
+            if data and "hourly" in data:
+                for period in data.get("hourly", []):
+                    dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
+                    key = period["startTime"]
+                    if dt <= now_dt and key in logged_by_time:
+                        result_hourly.append(logged_by_time[key])
+                        seen.add(key)
+                    else:
+                        result_hourly.append(period)
+                        seen.add(key)
+            
             for key, val in logged_by_time.items():
                 if key not in seen:
                     result_hourly.append(val)
+            
             result_hourly.sort(key=lambda x: x["startTime"])
-            data_out = data or {}
+            data_out = data or {} # if 'data' is None (e.g., fetch failed), this makes data_out = {}
             data_out["hourly"] = result_hourly
             data_out["timezone"] = tz.zone
         else:
@@ -93,35 +103,25 @@ def init_routes(app):
         result = [h.as_dict() for h in hours]
         return jsonify(result)
 
+    @app.route("/api/advisories")
+    def advisories_api():
+        # This endpoint's direct FAA dependency is being deprecated in favor of 
+        # background fetching. Returning empty data for now.
+        output = {}
+        for hub in config.HUBS:
+            output[hub["iata"]] = []
+        return jsonify(output)
+
     @app.route("/api/groundstops")
     def groundstops_api():
-        url = "https://nasstatus.faa.gov/api/airport-status-information"
-        try:
-            resp = requests.get(url, timeout=15)
-            resp.raise_for_status()
-            if resp.text.strip().startswith("<?xml"):
-                xml = ElementTree.fromstring(resp.content)
-                output = {}
-                for airport in xml.findall(".//airport"):
-                    iata = airport.findtext("id")
-                    for gs in airport.findall("ground_stop"):
-                        if gs.findtext("end_time") != "":
-                            reason = gs.findtext("reason") or "Ground stop in effect"
-                            output[iata] = reason
-                return jsonify(output)
-            elif resp.headers.get("Content-Type", "").startswith("application/json"):
-                data = resp.json()
-                output = {}
-                for ap in data.get("AirportStatusList", []):
-                    iata = ap.get("IATA")
-                    for gs in ap.get("GroundStops", []):
-                        if gs.get("EndTime"):
-                            reason = gs.get("Reason", "Ground stop in effect")
-                            output[iata] = reason
-                return jsonify(output)
-        except Exception:
-            pass
-        return jsonify({})
+        stops = config.GROUND_STOPS_CACHE.get("json")
+        return jsonify(stops if stops is not None else {})
+
+    @app.route("/api/grounddelays")
+    def grounddelays_api():
+        delays = config.GROUND_DELAYS_CACHE.get("json")
+        return jsonify(delays if delays is not None else {})
+
 
     @app.route('/static/<path:filename>')
     def custom_static(filename):
@@ -130,22 +130,40 @@ def init_routes(app):
     @app.route('/db_status')
     def db_status():
         db_path = os.path.join(config.DATA_DIR, "weatherlog.db")
+        size = 0
+        unit = "B"
+        days = 0
         try:
-            size_bytes = os.path.getsize(db_path)
-            if size_bytes < 1024 * 1024 * 1024:
-                size = round(size_bytes / (1024 * 1024), 2)
-                unit = "MB"
-            else:
-                size = round(size_bytes / (1024 * 1024 * 1024), 2)
-                unit = "GB"
-        except Exception:
-            size = 0
-            unit = "MB"
-        days = db.session.query(HourlyWeather.date).distinct().count()
-        return f"The DB is {size} {unit} in size and contains {days} days worth of data"
+            if os.path.exists(db_path):
+                size_bytes = os.path.getsize(db_path)
+                if size_bytes > 1024 * 1024 * 1024:
+                    size = round(size_bytes / (1024 * 1024 * 1024), 2)
+                    unit = "GB"
+                elif size_bytes > 1024 * 1024:
+                    size = round(size_bytes / (1024 * 1024), 2)
+                    unit = "MB"
+                elif size_bytes > 1024:
+                    size = round(size_bytes / 1024, 2)
+                    unit = "KB"
+                else:
+                    size = size_bytes
+                    unit = "B"
+        except Exception as e:
+            print(f"Could not get DB size: {e}")
+        
+        try:
+            days = db.session.query(HourlyWeather.date).distinct().count()
+        except Exception as e:
+            print(f"Could not get DB days count: {e}")
+
+        return jsonify({"size": size, "unit": unit, "days": days})
+
+    @app.route("/api/archive-dates")
+    def archive_dates_api():
+        dates = db.session.query(HourlySnapshot.date).distinct().order_by(HourlySnapshot.date.desc()).all()
+        return jsonify([d[0] for d in dates])
 
     @app.route("/api/hourly-snapshots/<iata>/<date>")
     def api_hourly_snapshots(iata, date):
         rows = HourlySnapshot.query.filter_by(iata=iata.upper(), date=date).order_by(HourlySnapshot.hour).all()
         return jsonify([r.as_dict() for r in rows])
-# --- END OF FILE routes.py ---
