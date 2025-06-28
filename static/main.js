@@ -163,7 +163,7 @@ async function loadDashboard(isUpdate = false) {
             }
         }
 
-        const {hourBlocks, percentHigh, percentPartial} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay, groundStopHoursForThisDay);
+        const {hourBlocks, percentHigh, percentPartial} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay, groundStopHoursForThisDay, (dayIdx > 0 ? null : groundDelayData));
         let assessment = getDailyAssessment(percentHigh, percentPartial);
         
         if (effectiveGroundStopData) {

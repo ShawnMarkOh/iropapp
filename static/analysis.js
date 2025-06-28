@@ -1,4 +1,4 @@
-function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, ymdStr, runways, faaEventsForDay, groundStopHours = null) {
+function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, ymdStr, runways, faaEventsForDay, groundStopHours = null, groundDelayData = null) {
   let hourData = {};
   for (const period of hourlyPeriods) {
     const d = new Date(period.startTime);
@@ -57,8 +57,6 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       riskObj = { risk: "nodata", key: null, hourClass: "hour-nodata" };
       txt = "No data"; shortF = ""; detailedF = ""; temp = "";
     }
-    rawRisks.push(riskObj.risk);
-    riskObjects.push(riskObj); // Populate the array of risk objects
 
     let isGroundStopHour = false;
     if (groundStopHours) {
@@ -66,6 +64,14 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
             isGroundStopHour = true;
         }
     }
+
+    // If there's a ground stop, delay program, or FAA event, upgrade risk to high
+    if ((isGroundStopHour || groundDelayData || faaEvent.length > 0) && riskObj.risk !== 'nodata') {
+        riskObj = { risk: "high", key: "FAA Event", hourClass: "hour-severe" };
+    }
+
+    rawRisks.push(riskObj.risk);
+    riskObjects.push(riskObj); // Populate the array of risk objects
 
     hourBlocks.push({
       hour: h,
