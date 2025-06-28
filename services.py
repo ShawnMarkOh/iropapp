@@ -8,7 +8,7 @@ import pytz
 from datetime import datetime, timedelta
 from xml.etree import ElementTree
 from bs4 import BeautifulSoup
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
@@ -363,7 +363,7 @@ def import_from_db_file(filepath):
     # Import HourlyWeather
     if inspector.has_table('hourly_weather'):
         with source_engine.connect() as connection:
-            result = connection.execute("SELECT iata, start_time, data_json, date FROM hourly_weather")
+            result = connection.execute(text("SELECT iata, start_time, data_json, date FROM hourly_weather"))
             source_weather = result.fetchall()
             for row in source_weather:
                 exists = HourlyWeather.query.filter_by(iata=row[0], start_time=row[1]).first()
@@ -380,7 +380,7 @@ def import_from_db_file(filepath):
     # Import HourlySnapshot
     if inspector.has_table('hourly_snapshot'):
         with source_engine.connect() as connection:
-            result = connection.execute("SELECT iata, date, hour, snapshot_json FROM hourly_snapshot")
+            result = connection.execute(text("SELECT iata, date, hour, snapshot_json FROM hourly_snapshot"))
             source_snapshots = result.fetchall()
             for row in source_snapshots:
                 exists = HourlySnapshot.query.filter_by(iata=row[0], date=row[1], hour=row[2]).first()
