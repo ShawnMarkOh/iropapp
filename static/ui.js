@@ -152,6 +152,7 @@ function renderDashboard(allDayBase, dayLabels, dailyBrief, isUpdate = false) {
         // Day 0 (Today) - Always rendered
         if (allDayBase[0] && allDayBase[0].length > 0) {
             dashHTML += `<div class="day-header">${dayLabels[0]}</div>`;
+            dashHTML += `<div class="mobile-sort-notice">To reorder hubs on mobile, please use the "Edit Hubs" option in the menu.</div>`;
             dashHTML += `<div id="day-0-container"></div>`; // Container for cards
         } else {
             dashHTML += `<div class="day-header">${dayLabels[0] || 'Today'}</div><div class="text-center p-5 fs-4">No data available for today.</div>`;

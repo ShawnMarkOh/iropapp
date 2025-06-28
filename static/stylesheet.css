@@ -462,3 +462,21 @@ body {
     font-size: 0.9rem;
     margin: 0;
 }
+
+/* --- MOBILE SORT NOTICE --- */
+.mobile-sort-notice {
+    display: none;
+}
+
+@media (max-width: 767.98px) {
+    .mobile-sort-notice {
+        display: block;
+        padding: 0.75rem 1rem;
+        margin: 0 15px 20px 15px;
+        background-color: var(--bs-tertiary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: var(--border-radius);
+        text-align: center;
+        font-size: 0.9rem;
+    }
+}

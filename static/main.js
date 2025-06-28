@@ -320,17 +320,22 @@ function initSortable() {
     if (grid) {
         if (sortable) {
             sortable.destroy();
+            sortable = null;
         }
-        sortable = new Sortable(grid, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            chosenClass: 'sortable-chosen',
-            onEnd: function (evt) {
-                const cardElements = Array.from(grid.children);
-                const newOrder = cardElements.map(el => el.id.split('-')[1]);
-                setCookie("card_order", newOrder.join(','), 365);
-            }
-        });
+        
+        // Only enable sorting on non-mobile views (>= 768px, Bootstrap's 'md' breakpoint)
+        if (window.innerWidth >= 768) {
+            sortable = new Sortable(grid, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                onEnd: function (evt) {
+                    const cardElements = Array.from(grid.children);
+                    const newOrder = cardElements.map(el => el.id.split('-')[1]);
+                    setCookie("card_order", newOrder.join(','), 365);
+                }
+            });
+        }
     }
 }
 
@@ -448,6 +453,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     let bannerContainer = document.getElementById('archive-banner-container');
     bannerContainer.innerHTML = `<div class="archive-banner">Viewing archived weather for ${dateMatch[1]}</div>`;
   }
+
+  // Handle resizing to enable/disable sortable
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+          // Re-initialize sortable to enable/disable based on screen width
+          initSortable();
+      }, 250); // Debounce resize event
+  });
 
   if (typeof io !== "undefined") {
     const socket = io();
