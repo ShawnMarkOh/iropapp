@@ -28,22 +28,11 @@ def save_daily_log(log_data):
     with open(LOG_FILE, "w") as f:
         json.dump(log_data, f)
 
-def get_latlon_for_hub(iata):
-    lookup = {
-        "CLT": (35.2140, -80.9431),
-        "PHL": (39.8744, -75.2424),
-        "DCA": (38.8521, -77.0377),
-        "DAY": (39.9024, -84.2194),
-        "DFW": (32.8998, -97.0403),
-        "ORD": (41.9742, -87.9073)
-    }
-    return lookup.get(iata, (None, None))
-
 def get_nws_grid(iata):
     all_hubs = HUBS + INACTIVE_HUBS
     for hub in all_hubs:
         if hub["iata"] == iata:
-            lat, lon = get_latlon_for_hub(hub["iata"])
+            lat, lon = hub.get("lat"), hub.get("lon")
             if lat and lon:
                 resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", timeout=15)
                 resp.raise_for_status()

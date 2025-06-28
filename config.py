@@ -19,6 +19,8 @@ HUBS = [
         "iata": "CLT",
         "city": "Charlotte, NC",
         "tz": "America/New_York",
+        "lat": 35.2140,
+        "lon": -80.9431,
         "runways": [
             {"label": "18L/36R", "heading": 180, "len": 10000},
             {"label": "18C/36C", "heading": 180, "len": 10000},
@@ -31,6 +33,8 @@ HUBS = [
         "iata": "PHL",
         "city": "Philadelphia, PA",
         "tz": "America/New_York",
+        "lat": 39.8744,
+        "lon": -75.2424,
         "runways": [
             {"label": "9L/27R",  "heading": 90,  "len": 10000},
             {"label": "9R/27L",  "heading": 90,  "len": 9500},
@@ -42,6 +46,8 @@ HUBS = [
         "iata": "DCA",
         "city": "Washington, DC",
         "tz": "America/New_York",
+        "lat": 38.8521,
+        "lon": -77.0377,
         "runways": [
             {"label": "1/19",    "heading": 10,  "len": 7169},
             {"label": "15/33",   "heading": 150, "len": 5204},
@@ -52,6 +58,8 @@ HUBS = [
         "iata": "DAY",
         "city": "Dayton, OH",
         "tz": "America/New_York",
+        "lat": 39.9024,
+        "lon": -84.2194,
         "runways": [
             {"label": "6L/24R",  "heading": 60,  "len": 10500},
             {"label": "18/36",   "heading": 180, "len": 7500},
@@ -63,6 +71,8 @@ HUBS = [
         "iata": "DFW",
         "city": "Dallas-Fort Worth, TX",
         "tz": "America/Chicago",
+        "lat": 32.8998,
+        "lon": -97.0403,
         "runways": [
             {"label": "13L/31R", "heading": 130, "len": 9000},
             {"label": "13R/31L", "heading": 130, "len": 9200},
@@ -81,6 +91,8 @@ INACTIVE_HUBS = [
         "iata": "ORD",
         "city": "Chicago, IL",
         "tz": "America/Chicago",
+        "lat": 41.9742,
+        "lon": -87.9073,
         "runways": [
             {"label": "10L/28R", "heading": 100, "len": 13000},
             {"label": "9C/27C", "heading": 90, "len": 11260},
