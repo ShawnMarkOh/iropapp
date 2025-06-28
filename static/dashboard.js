@@ -368,7 +368,7 @@ function renderBaseCard(card) {
           : '';
         return `<div class="hour-cell ${h.hourClass}" 
           title="${h.hour}:00 - ${translateFAAString(h.txt)}${h.temp ? ', ' + h.temp : ''}${h.windTxt ? ' | ' + h.windTxt : ''}${h.windKts>0?` | Wind: ${h.windKts.toFixed(0)}kts (${h.windMPH.toFixed(0)}mph)`:""}"
-          onclick='${h.risk==="nodata" ? "" : `showHourModal(${JSON.stringify(h).replace(/'/g,"'")},${JSON.stringify(card.hub).replace(/'/g,"'")})`}'
+          onclick='${h.risk==="nodata" ? "" : `showHourModal(${JSON.stringify(h).replace(/'/g, "\\u0027")},${JSON.stringify(card.hub).replace(/'/g, "\\u0027")})`}'
         >${String(h.hour).padStart(2,'0')}${exclamations}</div>`;
       }).join("")}
     </div>
