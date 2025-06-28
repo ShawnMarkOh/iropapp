@@ -198,7 +198,7 @@ async function loadDashboard(isUpdate = false) {
             }
         }
 
-        const card = { hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: effectiveGroundStopData, groundDelay: (dayIdx > 0 ? null : groundDelayData), alerts: alerts };
+        const card = { isArchive, hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: effectiveGroundStopData, groundDelay: (dayIdx > 0 ? null : groundDelayData), alerts: alerts };
         
         allDayBaseData[dayIdx].push(card);
         if (!dailyBrief[dayIdx][assessment.summary]) dailyBrief[dayIdx][assessment.summary] = [];

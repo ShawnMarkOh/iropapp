@@ -317,7 +317,7 @@ function showHourModal(block, base) {
   }
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
-      <h5 class="modal-section-title">Weather Details</h5>
+      <h5 class="modal-section-title">${base.isArchive ? "Archived Weather Details" : "Weather Details"}</h5>
       <div class="table-responsive">
         <table class="modal-table weather-details-table table table-sm">
           <tbody>
