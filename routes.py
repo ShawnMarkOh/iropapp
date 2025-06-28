@@ -19,6 +19,10 @@ def init_routes(app):
     def calendar_view():
         return render_template("calendar.html")
 
+    @app.route("/edit-hubs")
+    def edit_hubs():
+        return render_template("edit_hubs.html")
+
     @app.route("/api-docs")
     def api_docs():
         return render_template("api_docs.html")
@@ -107,16 +111,6 @@ def init_routes(app):
         hours = HourlyWeather.query.filter_by(iata=iata.upper(), date=date).order_by(HourlyWeather.start_time).all()
         result = [h.as_dict() for h in hours]
         return jsonify(result)
-
-    @app.route("/api/advisories")
-    def advisories_api():
-        # This endpoint's direct FAA dependency is being deprecated in favor of 
-        # background fetching. Returning empty data for now.
-        output = {}
-        all_hubs = config.HUBS + config.INACTIVE_HUBS
-        for hub in all_hubs:
-            output[hub["iata"]] = []
-        return jsonify(output)
 
     @app.route("/api/groundstops")
     def groundstops_api():

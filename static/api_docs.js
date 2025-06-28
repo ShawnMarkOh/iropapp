@@ -55,10 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchData('/api/groundstops', 'groundstops-preview');
     });
 
-    document.getElementById('fetch-advisories')?.addEventListener('click', () => {
-        fetchData('/api/advisories', 'advisories-preview');
-    });
-
     document.getElementById('fetch-archive-dates')?.addEventListener('click', () => {
         fetchData('/api/archive-dates', 'archive-dates-preview');
     });

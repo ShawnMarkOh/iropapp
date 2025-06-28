@@ -12,6 +12,8 @@ from bs4 import BeautifulSoup
 from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
 from database import db, HourlyWeather, HourlySnapshot
 
+NWS_GRID_CACHE = {}
+
 def load_daily_log():
     today_str = datetime.now().strftime("%Y-%m-%d")
     if os.path.exists(LOG_FILE):
@@ -29,6 +31,9 @@ def save_daily_log(log_data):
         json.dump(log_data, f)
 
 def get_nws_grid(iata):
+    if iata in NWS_GRID_CACHE:
+        return NWS_GRID_CACHE[iata]
+    
     all_hubs = HUBS + INACTIVE_HUBS
     for hub in all_hubs:
         if hub["iata"] == iata:
@@ -38,12 +43,14 @@ def get_nws_grid(iata):
                 resp.raise_for_status()
                 grid = resp.json()
                 props = grid["properties"]
-                return {
+                result = {
                     "forecast": props["forecast"],
                     "forecastHourly": props["forecastHourly"],
                     "timezone": props["timeZone"],
                     "forecastZone": props.get("forecastZone")
                 }
+                NWS_GRID_CACHE[iata] = result
+                return result
     return None
 
 def fetch_weather_alerts(zone_url):

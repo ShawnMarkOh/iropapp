@@ -470,4 +470,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   }
+
+  // Check for action query parameter to open modal
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('action') === 'edit-hubs') {
+      const editHubsModalEl = document.getElementById('editHubsModal');
+      if (editHubsModalEl) {
+          const editHubsModal = new bootstrap.Modal(editHubsModalEl);
+          editHubsModal.show();
+          // Clean up URL
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, newUrl);
+      }
+  }
 });
