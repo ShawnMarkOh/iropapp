@@ -47,6 +47,8 @@ let FAA_EVENTS = {};
 let groundStops = {};
 let groundDelays = {};
 let allDayBaseData = [[],[],[]]; // Store all data globally for lazy loading
+let dayLabels = [];
+let dailyBrief = [{}, {}, {}];
 let sortable = null; // To hold the Sortable instance
 
 async function loadDashboard(isUpdate = false) {
@@ -55,14 +57,18 @@ async function loadDashboard(isUpdate = false) {
     dashboard.innerHTML = `<div class="text-center p-5 fs-4"><div class="spinner-border text-primary mb-3" role="status"></div><div>Loading weather data for all bases...</div></div>`;
   }
   
-  let dailyBrief = [{}, {}, {}], dayLabels = [], allDone = 0;
+  let localDailyBrief = [{}, {}, {}];
+  let localDayLabels = [];
+  let allDone = 0;
   const dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
   const isArchive = dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10));
   
   // Reset global data
   allDayBaseData = [[],[],[]];
 
-  for (const hub of HUBS) {
+  const hubsToFetch = Array.from(allHubsMap.values());
+
+  for (const hub of hubsToFetch) {
     try {
       let wx;
       let snapshots = [];
@@ -130,12 +136,12 @@ async function loadDashboard(isUpdate = false) {
             return periodDate === ymd;
         });
 
-        if (!dayLabels[dayIdx]) {
+        if (!localDayLabels[dayIdx]) {
             if (isArchive) {
-                dayLabels[dayIdx] = `Archive for ${formatLocalDateOnly(dayDate, hub.tz)}`;
+                localDayLabels[dayIdx] = `Archive for ${formatLocalDateOnly(dayDate, hub.tz)}`;
             } else {
                 const dayName = dayIdx === 0 ? "Today" : dayIdx === 1 ? "Tomorrow" : "The Day After";
-                dayLabels[dayIdx] = `${dayName} (${formatLocalDateOnly(dayDate, hub.tz)})`;
+                localDayLabels[dayIdx] = `${dayName} (${formatLocalDateOnly(dayDate, hub.tz)})`;
             }
         }
         
@@ -244,14 +250,25 @@ async function loadDashboard(isUpdate = false) {
         const card = { isArchive, hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: effectiveGroundStopData, groundDelay: (dayIdx > 0 ? null : groundDelayData), alerts: alerts };
         
         allDayBaseData[dayIdx].push(card);
-        if (!dailyBrief[dayIdx][assessment.summary]) dailyBrief[dayIdx][assessment.summary] = [];
-        dailyBrief[dayIdx][assessment.summary].push(hub.iata);
-        if (!dailyBrief[dayIdx].details) dailyBrief[dayIdx].details = [];
-        if (percentHigh > 0) dailyBrief[dayIdx].details.push(`${hub.iata}: ${percentHigh}% wx hours (${card.shortForecast})`);
+        if (!localDailyBrief[dayIdx][assessment.summary]) localDailyBrief[dayIdx][assessment.summary] = [];
+        localDailyBrief[dayIdx][assessment.summary].push(hub.iata);
+        if (!localDailyBrief[dayIdx].details) localDailyBrief[dayIdx].details = [];
+        if (percentHigh > 0) localDailyBrief[dayIdx].details.push(`${hub.iata}: ${percentHigh}% wx hours (${card.shortForecast})`);
       }
       allDone++;
-      if (allDone === HUBS.length) {
-        renderDashboard(allDayBaseData, dayLabels, dailyBrief, isUpdate);
+      if (allDone === hubsToFetch.length) {
+        dayLabels = localDayLabels;
+        dailyBrief = localDailyBrief;
+
+        const activeIatas = new Set(HUBS.map(h => h.iata));
+        const activeHubOrder = HUBS.map(h => h.iata);
+        const filteredData = allDayBaseData.map(dayData => {
+            const filtered = dayData.filter(card => activeIatas.has(card.iata));
+            filtered.sort((a, b) => activeHubOrder.indexOf(a.iata) - activeHubOrder.indexOf(b.iata));
+            return filtered;
+        });
+
+        renderDashboard(filteredData, dayLabels, dailyBrief, isUpdate);
         if (!isUpdate) {
             setupAccordionListeners();
             initSortable();
@@ -260,8 +277,19 @@ async function loadDashboard(isUpdate = false) {
     } catch (err) {
       console.error(`Failed to load data for ${hub.iata}:`, err);
       allDone++;
-      if (allDone === HUBS.length) {
-        renderDashboard(allDayBaseData, dayLabels, dailyBrief, isUpdate);
+      if (allDone === hubsToFetch.length) {
+        dayLabels = localDayLabels;
+        dailyBrief = localDailyBrief;
+
+        const activeIatas = new Set(HUBS.map(h => h.iata));
+        const activeHubOrder = HUBS.map(h => h.iata);
+        const filteredData = allDayBaseData.map(dayData => {
+            const filtered = dayData.filter(card => activeIatas.has(card.iata));
+            filtered.sort((a, b) => activeHubOrder.indexOf(a.iata) - activeHubOrder.indexOf(b.iata));
+            return filtered;
+        });
+
+        renderDashboard(filteredData, dayLabels, dailyBrief, isUpdate);
         if (!isUpdate) {
             setupAccordionListeners();
             initSortable();
@@ -304,7 +332,11 @@ function setupAccordionListeners() {
     if (collapse1) {
         collapse1.addEventListener('show.bs.collapse', () => {
             if (!day1Loaded) {
-                renderDay(allDayBaseData[1], 'day-1-container', 1);
+                const activeIatas = new Set(HUBS.map(h => h.iata));
+                const activeHubOrder = HUBS.map(h => h.iata);
+                const filteredDayData = allDayBaseData[1].filter(card => activeIatas.has(card.iata));
+                filteredDayData.sort((a, b) => activeHubOrder.indexOf(a.iata) - activeHubOrder.indexOf(b.iata));
+                renderDay(filteredDayData, 'day-1-container', 1);
                 day1Loaded = true;
             }
         });
@@ -314,7 +346,11 @@ function setupAccordionListeners() {
     if (collapse2) {
         collapse2.addEventListener('show.bs.collapse', () => {
             if (!day2Loaded) {
-                renderDay(allDayBaseData[2], 'day-2-container', 2);
+                const activeIatas = new Set(HUBS.map(h => h.iata));
+                const activeHubOrder = HUBS.map(h => h.iata);
+                const filteredDayData = allDayBaseData[2].filter(card => activeIatas.has(card.iata));
+                filteredDayData.sort((a, b) => activeHubOrder.indexOf(a.iata) - activeHubOrder.indexOf(b.iata));
+                renderDay(filteredDayData, 'day-2-container', 2);
                 day2Loaded = true;
             }
         });
@@ -417,9 +453,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (getCookie("cookie_consent") === "true") {
             setCookie("card_order", newOrder.join(','), 365);
         }
-        // Re-initialize hubs based on the new order and reload dashboard
+        // Re-initialize hubs based on the new order
         await initializeHubs();
-        await loadDashboard(); // Full reload to redraw everything in order
+        
+        // Re-render the dashboard with the new hub order from existing data
+        const activeIatas = new Set(HUBS.map(h => h.iata));
+        const activeHubOrder = HUBS.map(h => h.iata);
+        const filteredData = allDayBaseData.map(dayData => {
+            const filtered = dayData.filter(card => activeIatas.has(card.iata));
+            filtered.sort((a, b) => activeHubOrder.indexOf(a.iata) - activeHubOrder.indexOf(b.iata));
+            return filtered;
+        });
+        
+        renderDashboard(filteredData, dayLabels, dailyBrief, true);
+        initSortable();
       }
     });
   }
