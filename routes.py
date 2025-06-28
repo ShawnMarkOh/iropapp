@@ -7,7 +7,6 @@ from datetime import datetime
 
 from flask import jsonify, render_template, send_from_directory, request
 from sqlalchemy import desc
-from werkzeug.utils import secure_filename
 
 import config
 import services
@@ -122,27 +121,6 @@ def init_routes(app):
         delays = config.GROUND_DELAYS_CACHE.get("json")
         return jsonify(delays if delays is not None else {})
 
-    @app.route('/api/import-weather-db', methods=['POST'])
-    def import_weather_db():
-        if 'db_file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-        file = request.files['db_file']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
-        if file:
-            filename = secure_filename(file.filename)
-            temp_path = os.path.join(config.DATA_DIR, f"temp_{filename}")
-            file.save(temp_path)
-            
-            try:
-                stats = services.import_from_db_file(temp_path)
-                os.remove(temp_path)
-                return jsonify({"success": True, "stats": stats})
-            except Exception as e:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                return jsonify({"error": f"An error occurred during import: {str(e)}"}), 500
-        return jsonify({"error": "File upload failed"}), 500
 
     @app.route('/static/<path:filename>')
     def custom_static(filename):
