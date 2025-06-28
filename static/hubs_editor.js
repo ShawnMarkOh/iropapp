@@ -38,7 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveHubOrder() {
         const activeHubElements = Array.from(activeHubsContainer.querySelectorAll('.card'));
         const activeHubsOrder = activeHubElements.map(el => el.dataset.iata);
-        setCookie('card_order', activeHubsOrder.join(','), 365);
+        
+        if (getCookie("cookie_consent") === "true") {
+            setCookie('card_order', activeHubsOrder.join(','), 365);
+        }
 
         if (activeHubElements.length === 0) {
             activeHubsContainer.innerHTML = '<p class="text-muted">Drag hubs here to activate them.</p>';
@@ -48,7 +51,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function loadHubs() {
+    function loadHubs(defaultActiveHubs, defaultInactiveHubs) {
+        const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
+        const allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
+
+        let activeHubs = [];
+        let inactiveHubs = [];
+
+        const savedOrderCookie = getCookie('card_order');
+        if (getCookie("cookie_consent") === "true" && savedOrderCookie) {
+            const savedOrder = savedOrderCookie.split(',');
+            activeHubs = savedOrder.map(iata => allHubsMap.get(iata)).filter(Boolean);
+            const activeIataSet = new Set(savedOrder);
+            inactiveHubs = allHubs.filter(hub => !activeIataSet.has(hub.iata));
+        } else {
+            activeHubs = defaultActiveHubs;
+            inactiveHubs = defaultInactiveHubs;
+        }
+
+        activeHubsContainer.innerHTML = activeHubs.map(renderHub).join('');
+        inactiveHubsContainer.innerHTML = inactiveHubs.map(renderHub).join('');
+
+        if (activeHubs.length === 0) {
+            activeHubsContainer.innerHTML = '<p class="text-muted">Drag hubs here to activate them.</p>';
+        }
+        if (inactiveHubs.length === 0) {
+            inactiveHubsContainer.innerHTML = '<p class="text-muted">All hubs are active.</p>';
+        }
+    }
+
+    async function init() {
+        let defaultActiveHubs, defaultInactiveHubs;
         try {
             const [defaultActiveRes, defaultInactiveRes] = await Promise.all([
                 fetch('/api/hubs'),
@@ -59,44 +92,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Failed to fetch hub data');
             }
 
-            const defaultActiveHubs = await defaultActiveRes.json();
-            const defaultInactiveHubs = await defaultInactiveRes.json();
-            const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
-            const allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
-
-            let activeHubs = [];
-            let inactiveHubs = [];
-
-            const savedOrderCookie = getCookie('card_order');
-            if (savedOrderCookie) {
-                const savedOrder = savedOrderCookie.split(',');
-                activeHubs = savedOrder.map(iata => allHubsMap.get(iata)).filter(Boolean);
-                const activeIataSet = new Set(savedOrder);
-                inactiveHubs = allHubs.filter(hub => !activeIataSet.has(hub.iata));
-            } else {
-                activeHubs = defaultActiveHubs;
-                inactiveHubs = defaultInactiveHubs;
-            }
-
-            activeHubsContainer.innerHTML = activeHubs.map(renderHub).join('');
-            inactiveHubsContainer.innerHTML = inactiveHubs.map(renderHub).join('');
-
-            if (activeHubs.length === 0) {
-                activeHubsContainer.innerHTML = '<p class="text-muted">Drag hubs here to activate them.</p>';
-            }
-            if (inactiveHubs.length === 0) {
-                inactiveHubsContainer.innerHTML = '<p class="text-muted">All hubs are active.</p>';
-            }
-
+            defaultActiveHubs = await defaultActiveRes.json();
+            defaultInactiveHubs = await defaultInactiveRes.json();
         } catch (error) {
             console.error(error);
             activeHubsContainer.innerHTML = '<div class="alert alert-danger">Could not load active hubs.</div>';
             inactiveHubsContainer.innerHTML = '<div class="alert alert-danger">Could not load inactive hubs.</div>';
+            return;
         }
-    }
 
-    async function init() {
-        await loadHubs();
+        // Cookie consent check
+        const consent = getCookie("cookie_consent");
+        if (consent === null) {
+            const banner = document.getElementById('cookie-consent-banner');
+            if(banner) banner.style.display = 'block';
+
+            document.getElementById('cookie-accept')?.addEventListener('click', () => {
+                setCookie("cookie_consent", "true", 365);
+                if(banner) banner.style.display = 'none';
+                // Save default order on accept
+                const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
+                setCookie("card_order", defaultOrder, 365);
+                loadHubs(defaultActiveHubs, defaultInactiveHubs);
+            });
+
+            document.getElementById('cookie-decline')?.addEventListener('click', () => {
+                setCookie("cookie_consent", "false", 365);
+                if(banner) banner.style.display = 'none';
+            });
+        }
+
+        loadHubs(defaultActiveHubs, defaultInactiveHubs);
 
         new Sortable(activeHubsContainer, {
             group: 'shared-hubs',
