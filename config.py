@@ -95,9 +95,71 @@ INACTIVE_HUBS = [
         "lon": -87.9073,
         "runways": [
             {"label": "10L/28R", "heading": 100, "len": 13000},
-            {"label": "9C/27C", "heading": 90, "len": 11260},
-            {"label": "9L/27R", "heading": 90, "len": 11245},
+            {"label": "9C/27C",  "heading": 90,  "len": 11260},
+            {"label": "9L/27R",  "heading": 90,  "len": 11245},
             {"label": "10C/28C", "heading": 100, "len": 10801},
+        ]
+    },
+    {
+        "name": "Greenville-Spartanburg International Airport",
+        "iata": "GSP",
+        "city": "Greenville, SC",
+        "tz": "America/New_York",
+        "lat": 34.8956,
+        "lon": -82.2189,
+        "runways": [
+            {"label": "4/22", "heading": 40, "len": 11001}
+        ]
+    },
+    {
+        "name": "Akron-Canton Airport",
+        "iata": "CAK",
+        "city": "Akron, OH",
+        "tz": "America/New_York",
+        "lat": 40.9162,
+        "lon": -81.4422,
+        "runways": [
+            {"label": "1/19", "heading": 10, "len": 7601},
+            {"label": "5/23", "heading": 50, "len": 8204}
+        ]
+    },
+    {
+        "name": "McGhee Tyson Airport",
+        "iata": "TYS",
+        "city": "Knoxville, TN",
+        "tz": "America/New_York",
+        "lat": 35.8122,
+        "lon": -83.9941,
+        "runways": [
+            {"label": "5L/23R", "heading": 50, "len": 9003},
+            {"label": "5R/23L", "heading": 50, "len": 9000}
+        ]
+    },
+    {
+        "name": "Hartsfield-Jackson Atlanta International Airport",
+        "iata": "ATL",
+        "city": "Atlanta, GA",
+        "tz": "America/New_York",
+        "lat": 33.6407,
+        "lon": -84.4277,
+        "runways": [
+            {"label": "8L/26R", "heading": 90, "len": 9000},
+            {"label": "8R/26L", "heading": 90, "len": 9999},
+            {"label": "9L/27R", "heading": 90, "len": 12390},
+            {"label": "9R/27L", "heading": 90, "len": 9000},
+            {"label": "10/28",  "heading": 90, "len": 9000}
+        ]
+    },
+    {
+        "name": "Pensacola International Airport",
+        "iata": "PNS",
+        "city": "Pensacola, FL",
+        "tz": "America/Chicago",
+        "lat": 30.4735,
+        "lon": -87.1866,
+        "runways": [
+            {"label": "17/35", "heading": 170, "len": 7004},
+            {"label": "8/26",  "heading": 80,  "len": 7000}
         ]
     }
 ]
