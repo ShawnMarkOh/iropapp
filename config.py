@@ -72,8 +72,22 @@ HUBS = [
             {"label": "18L/36R", "heading": 180, "len": 13300},
             {"label": "18R/36L", "heading": 180, "len": 13400},
         ]
+    },
+    {
+        "name": "O'Hare International Airport",
+        "iata": "ORD",
+        "city": "Chicago, IL",
+        "tz": "America/Chicago",
+        "runways": [
+            {"label": "10L/28R", "heading": 100, "len": 13000},
+            {"label": "9C/27C", "heading": 90, "len": 11260},
+            {"label": "9L/27R", "heading": 90, "len": 11245},
+            {"label": "10C/28C", "heading": 100, "len": 10801},
+        ]
     }
 ]
+
+INACTIVE_HUBS = []
 
 # --- Caching ---
 FAA_EVENTS_CACHE = {}

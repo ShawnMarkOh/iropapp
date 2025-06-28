@@ -19,6 +19,10 @@ def init_routes(app):
     def calendar_view():
         return render_template("calendar.html")
 
+    @app.route("/edit-hubs")
+    def edit_hubs_view():
+        return render_template("edit_hubs.html")
+
     @app.route("/api-docs")
     def api_docs():
         return render_template("api_docs.html")
@@ -26,6 +30,10 @@ def init_routes(app):
     @app.route("/api/hubs")
     def hubs_api():
         return jsonify(config.HUBS)
+
+    @app.route("/api/hubs/inactive")
+    def inactive_hubs_api():
+        return jsonify(config.INACTIVE_HUBS)
 
     @app.route("/api/weather/<iata>")
     def weather_api(iata):
