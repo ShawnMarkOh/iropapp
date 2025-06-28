@@ -4,7 +4,7 @@ import os
 import threading
 from flask import Flask
 from flask_cors import CORS
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 
 import config
 from database import db, init_db
@@ -27,6 +27,17 @@ init_db(app)
 
 # Register all the routes from routes.py
 init_routes(app)
+
+# --- Socket.IO Event Handlers ---
+@socketio.on('hub_order_change')
+def handle_hub_order_change(data):
+    """
+    Receives a new hub order from a client,
+    and broadcasts it to all clients.
+    """
+    # The data is expected to be a dictionary, e.g., {'order': ['CLT', 'DFW']}
+    print(f"Hub order change received, broadcasting to clients: {data}")
+    emit('hub_order_update', data, broadcast=True)
 
 # --- Background Tasks ---
 # Start background threads for data fetching

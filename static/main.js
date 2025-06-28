@@ -408,13 +408,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadDashboard(true);
       await fetchDbStatus();
     });
-  }
 
-  const editHubsModal = document.getElementById('editHubsModal');
-  if (editHubsModal) {
-      editHubsModal.addEventListener('hidden.bs.modal', async () => {
-          await initializeHubs();
-          await loadDashboard(true);
-      });
+    socket.on('hub_order_update', async function(data) {
+      console.log('Hub order update received via websocket.', data);
+      const newOrder = data.order;
+      if (newOrder && Array.isArray(newOrder)) {
+        // Update the cookie for this user if they've consented
+        if (getCookie("cookie_consent") === "true") {
+            setCookie("card_order", newOrder.join(','), 365);
+        }
+        // Re-initialize hubs based on the new order and reload dashboard
+        await initializeHubs();
+        await loadDashboard(); // Full reload to redraw everything in order
+      }
+    });
   }
 });

@@ -23,6 +23,7 @@ function getCookie(name) {
 document.addEventListener('DOMContentLoaded', () => {
     const activeHubsContainer = document.getElementById('active-hubs-container');
     const inactiveHubsContainer = document.getElementById('inactive-hubs-container');
+    const socket = typeof io !== 'undefined' ? io() : null;
 
     function renderHub(hub) {
         return `
@@ -37,10 +38,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveHubOrder() {
         const activeHubElements = Array.from(activeHubsContainer.querySelectorAll('.card'));
-        const activeHubsOrder = activeHubElements.map(el => el.dataset.iata);
+        const activeHubsOrder = activeHubsElements.map(el => el.dataset.iata);
         
         if (getCookie("cookie_consent") === "true") {
             setCookie('card_order', activeHubsOrder.join(','), 365);
+        }
+
+        if (socket) {
+            socket.emit('hub_order_change', { order: activeHubsOrder });
         }
 
         if (activeHubElements.length === 0) {
