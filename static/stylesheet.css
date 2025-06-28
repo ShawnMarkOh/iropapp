@@ -479,4 +479,10 @@ body {
         text-align: center;
         font-size: 0.9rem;
     }
+
+    .hubs-list {
+        min-height: 100px;
+        max-height: 25vh;
+        overflow-y: auto;
+    }
 }
