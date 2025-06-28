@@ -8,6 +8,8 @@ import pytz
 from datetime import datetime, timedelta
 from xml.etree import ElementTree
 from bs4 import BeautifulSoup
+from sqlalchemy import create_engine, inspect
+from sqlalchemy.orm import sessionmaker
 
 from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
 from database import db, HourlyWeather, HourlySnapshot
@@ -350,4 +352,50 @@ def fetch_faa_ground_delays():
         print(f"Error in fetch_faa_ground_delays: {e}")
         pass
     return output
+
+def import_from_db_file(filepath):
+    source_engine = create_engine(f'sqlite:///{filepath}')
+    
+    inspector = inspect(source_engine)
+    
+    imported_counts = {"hourly_weather": 0, "hourly_snapshot": 0}
+    
+    # Import HourlyWeather
+    if inspector.has_table('hourly_weather'):
+        with source_engine.connect() as connection:
+            result = connection.execute("SELECT iata, start_time, data_json, date FROM hourly_weather")
+            source_weather = result.fetchall()
+            for row in source_weather:
+                exists = HourlyWeather.query.filter_by(iata=row[0], start_time=row[1]).first()
+                if not exists:
+                    new_weather = HourlyWeather(
+                        iata=row[0],
+                        start_time=row[1],
+                        data_json=row[2],
+                        date=row[3]
+                    )
+                    db.session.add(new_weather)
+                    imported_counts["hourly_weather"] += 1
+
+    # Import HourlySnapshot
+    if inspector.has_table('hourly_snapshot'):
+        with source_engine.connect() as connection:
+            result = connection.execute("SELECT iata, date, hour, snapshot_json FROM hourly_snapshot")
+            source_snapshots = result.fetchall()
+            for row in source_snapshots:
+                exists = HourlySnapshot.query.filter_by(iata=row[0], date=row[1], hour=row[2]).first()
+                if not exists:
+                    new_snapshot = HourlySnapshot(
+                        iata=row[0],
+                        date=row[1],
+                        hour=row[2],
+                        snapshot_json=row[3]
+                    )
+                    db.session.add(new_snapshot)
+                    imported_counts["hourly_snapshot"] += 1
+    
+    if imported_counts["hourly_weather"] > 0 or imported_counts["hourly_snapshot"] > 0:
+        db.session.commit()
+        
+    return imported_counts
 # --- END OF FILE services.py ---
