@@ -247,7 +247,15 @@ function showHourModal(block, base) {
   }
 
   let groundStopModalHTML = '';
-  if (block.isGroundStop && base.groundStop) {
+  if (block.groundStop) { // From archive
+      groundStopModalHTML = `
+        <div class="faa-event-summary" style="background-color: var(--risk-high-bg); color: white; border-left-color: #fff;">
+            <b>Archived Ground Stop</b><br>
+            <b>Reason:</b> ${block.groundStop.reason}<br>
+            <b>Ends:</b> ${block.groundStop.end_time || 'N/A'}
+        </div>
+      `;
+  } else if (block.isGroundStop && base.groundStop) { // Live
       groundStopModalHTML = `
         <div class="faa-event-summary" style="background-color: var(--risk-high-bg); color: white; border-left-color: #fff;">
             <b>Active Ground Stop</b><br>
@@ -258,7 +266,15 @@ function showHourModal(block, base) {
   }
 
   let groundDelayModalHTML = '';
-  if (base.groundDelay) {
+  if (block.groundDelay) { // From archive
+      groundDelayModalHTML = `
+        <div class="faa-event-summary" style="background-color: var(--risk-moderate-bg); color: white; border-left-color: #fff;">
+            <b>Archived Ground Delay Program</b><br>
+            <b>Reason:</b> ${block.groundDelay.reason}<br>
+            <b>Average Delay:</b> ${block.groundDelay.avg_delay}
+        </div>
+      `;
+  } else if (base.groundDelay) { // Live
       groundDelayModalHTML = `
         <div class="faa-event-summary" style="background-color: var(--risk-moderate-bg); color: white; border-left-color: #fff;">
             <b>Active Ground Delay Program</b><br>
@@ -319,7 +335,7 @@ function showHourModal(block, base) {
   }
   modalLabel.innerHTML = `${base.name} (${base.iata})`;
   modalBody.innerHTML = `
-      <h5 class="modal-section-title">${base.isArchive ? "Archived Weather Details" : "Weather Details"}</h5>
+      <h5 class="modal-section-title">${base.isArchive || block.isPast ? "Archived Weather Details" : "Weather Details"}</h5>
       <div class="table-responsive">
         <table class="modal-table weather-details-table table table-sm">
           <tbody>

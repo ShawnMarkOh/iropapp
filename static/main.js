@@ -23,9 +23,10 @@ async function loadDashboard(isUpdate = false) {
   for (const hub of HUBS) {
     try {
       let wx;
+      let snapshots = [];
       if (isArchive) {
         // Archive logic remains the same
-        let snapshots = await fetchSnapshots(hub.iata, dateMatch[1]);
+        snapshots = await fetchSnapshots(hub.iata, dateMatch[1]);
         let periods = Array(24).fill(null);
         let faa_events = [];
         let sirs = [];
@@ -163,7 +164,7 @@ async function loadDashboard(isUpdate = false) {
             }
         }
 
-        const {hourBlocks, percentHigh, percentPartial} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay, groundStopHoursForThisDay, (dayIdx > 0 ? null : groundDelayData));
+        const {hourBlocks, percentHigh, percentPartial} = analyzeDayHours(wx.hourly, ymd, hub.tz, highlightHour, hub.name, ymd, hub.runways, faaEventsForDay, groundStopHoursForThisDay, (dayIdx > 0 ? null : groundDelayData), isArchive ? snapshots : null);
         let assessment = getDailyAssessment(percentHigh, percentPartial);
         
         if (effectiveGroundStopData) {

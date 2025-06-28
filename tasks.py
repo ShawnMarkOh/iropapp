@@ -42,7 +42,9 @@ def data_refresh_job(app, socketio):
                     "weather": weather_data,
                     "sirs": sirs,
                     "terminal_constraints": terminal_constraints,
-                    "faa_events": faa_events
+                    "faa_events": faa_events,
+                    "ground_stop": new_ground_stops.get(iata),
+                    "ground_delay": new_ground_delays.get(iata)
                 }
                 
                 cur_date = now.strftime('%Y-%m-%d')
