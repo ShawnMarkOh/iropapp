@@ -25,6 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const inactiveHubsContainer = document.getElementById('inactive-hubs-container');
     const socket = typeof io !== 'undefined' ? io() : null;
 
+    // If the editor elements aren't on the page, don't initialize.
+    if (!activeHubsContainer || !inactiveHubsContainer) {
+        return;
+    }
+
     function renderHub(hub) {
         return `
             <div class="card mb-3" data-iata="${hub.iata}">
@@ -38,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveHubOrder() {
         const activeHubElements = Array.from(activeHubsContainer.querySelectorAll('.card'));
-        const activeHubsOrder = activeHubsElements.map(el => el.dataset.iata);
+        const activeHubsOrder = activeHubElements.map(el => el.dataset.iata);
         
         if (getCookie("cookie_consent") === "true") {
             setCookie('card_order', activeHubsOrder.join(','), 365);
@@ -48,11 +53,35 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.emit('hub_order_change', { order: activeHubsOrder });
         }
 
+        // Manage placeholder text for active hubs
+        const activePlaceholder = activeHubsContainer.querySelector('p.text-muted');
         if (activeHubElements.length === 0) {
-            activeHubsContainer.innerHTML = '<p class="text-muted">Drag hubs here to activate them.</p>';
+            if (!activePlaceholder) {
+                const p = document.createElement('p');
+                p.className = 'text-muted';
+                p.textContent = 'Drag hubs here to activate them.';
+                activeHubsContainer.appendChild(p);
+            }
+        } else {
+            if (activePlaceholder) {
+                activePlaceholder.remove();
+            }
         }
-        if (inactiveHubsContainer.querySelectorAll('.card').length === 0) {
-            inactiveHubsContainer.innerHTML = '<p class="text-muted">All hubs are active.</p>';
+
+        // Manage placeholder text for inactive hubs
+        const inactiveElements = inactiveHubsContainer.querySelectorAll('.card');
+        const inactivePlaceholder = inactiveHubsContainer.querySelector('p.text-muted');
+        if (inactiveElements.length === 0) {
+            if (!inactivePlaceholder) {
+                const p = document.createElement('p');
+                p.className = 'text-muted';
+                p.textContent = 'All hubs are active.';
+                inactiveHubsContainer.appendChild(p);
+            }
+        } else {
+            if (inactivePlaceholder) {
+                inactivePlaceholder.remove();
+            }
         }
     }
 
