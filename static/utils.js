@@ -14,27 +14,45 @@ function windToKts(val) {if (!val) return 0;let v = parseFloat(val);if (/mph/.te
 function windToMPH(val) {if (!val) return 0;let v = parseFloat(val);if (/mph/.test(val)) return v;return v * 1.15078;}
 function crosswindComponent(runwayHeading, windDir, windKts) {let windDeg = windDirToDeg(windDir);if (windDeg === null) return 0;let angle = Math.abs(runwayHeading - windDeg);if (angle > 180) angle = 360 - angle;let rad = angle * Math.PI / 180;let cross = Math.abs(windKts * Math.sin(rad));return cross;}
 function getHourWindRisk(spd, cross) {if (spd > 50) return {risk:"high", txt:"Wind > 50 kts", class:"hour-wind"};if (spd > 35) return {risk:"wind-high", txt:"High wind ("+spd+" kts)", class:"hour-wind-high"};if (spd > 0 && spd > 27) return {risk:"partial", txt:"Wind ("+spd+" kts)", class:"hour-wind"};if (cross > 27) return {risk:"high", txt:"Crosswind "+cross+" kts", class:"hour-wind"};if (cross > 20) return {risk:"wind-high", txt:"High crosswind ("+cross+" kts)", class:"hour-wind-high"};if (cross > 15) return {risk:"wind-partial", txt:"Moderate crosswind ("+cross+" kts)", class:"hour-wind-partial"};return null;}
-function analyzeRunwaySafety(runways, windDir, windKts) {
+function analyzeRunwaySafety(runways, windDir, windKts, gustKts) {
     let runwayResults = [];
     for (let rw of runways) {
         if (rw.len < 5040) continue;
         let cross = crosswindComponent(rw.heading, windDir, windKts);
         let status = "";
         let className = "";
+        let safe = false;
+
         if (rw.len >= 5360) {
-            let safe = (windKts <= 50) && (cross <= 27);
+            safe = (windKts <= 50) && (cross <= 27);
             status = safe ? "SAFE" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
             className = safe ? "runway-safe" : "runway-unsafe";
         } else if (rw.len >= 5040) {
-            let safe = (windKts <= 50) && (cross <= 27);
+            safe = (windKts <= 50) && (cross <= 27);
             status = safe ? "SAFE (CRJ700)" : (windKts > 50 ? "UNSAFE WIND" : "UNSAFE CROSSWIND");
             className = safe ? "runway-crj700only" : "runway-unsafe";
         }
+
+        if (safe && gustKts) {
+            if (gustKts > 50) {
+                safe = false;
+                status = `UNSAFE (GUSTS ${Math.round(gustKts)} KTS)`;
+                className = "runway-unsafe";
+            } else {
+                let crossGust = crosswindComponent(rw.heading, windDir, gustKts);
+                if (crossGust > 27) {
+                    safe = false;
+                    status = `UNSAFE (GUSTS ${Math.round(crossGust)} KTS CROSS)`;
+                    className = "runway-unsafe";
+                }
+            }
+        }
+
         if (rw.len >= 5040) {
             runwayResults.push({
                 label: rw.label,
                 cross: Math.round(cross),
-                safe: status.startsWith("SAFE"),
+                safe: safe,
                 warning: status,
                 len: rw.len,
                 className: className

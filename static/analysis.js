@@ -40,7 +40,8 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       if (period.temperature !== undefined && period.temperatureUnit) {
         temp = `${period.temperature}°${period.temperatureUnit}`;
       }
-      runwayStatus = analyzeRunwaySafety(runways, dir, spdKts);
+      const gustKts = period.windGust ? windToKts(period.windGust) : 0;
+      runwayStatus = analyzeRunwaySafety(runways, dir, spdKts, gustKts);
       let crossMax = Math.max(0, ...runwayStatus.map(rw=>rw.cross));
       let windRiskObj = getHourWindRisk(spdKts, crossMax);
 
