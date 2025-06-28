@@ -134,11 +134,9 @@ body {
 @keyframes soft-flash {
   0%, 100% {
     opacity: 0;
-    box-shadow: 0 0 0 0 var(--risk-high-bg);
   }
   50% {
     opacity: 1;
-    box-shadow: 0 0 12px 2px var(--risk-high-bg);
   }
 }
 .card.ground-stop-active {
@@ -153,6 +151,7 @@ body {
   right: -1px;
   bottom: -1px;
   border-radius: var(--border-radius);
+  box-shadow: 0 0 12px 2px var(--risk-high-bg);
   animation: soft-flash 1.5s infinite ease-in-out;
   z-index: -1;
   pointer-events: none;
