@@ -73,6 +73,9 @@ HUBS = [
             {"label": "18R/36L", "heading": 180, "len": 13400},
         ]
     },
+]
+
+INACTIVE_HUBS = [
     {
         "name": "O'Hare International Airport",
         "iata": "ORD",
@@ -86,8 +89,6 @@ HUBS = [
         ]
     }
 ]
-
-INACTIVE_HUBS = []
 
 # --- Caching ---
 FAA_EVENTS_CACHE = {}

@@ -43,17 +43,6 @@ async function loadDashboard(isUpdate = false) {
   // Reset global data
   allDayBaseData = [[],[],[]];
 
-  const consent = getCookie("cookie_consent");
-  if (consent === "true") {
-      const savedOrder = getCookie("card_order");
-      if (savedOrder) {
-          const order = savedOrder.split(',');
-          // Filter out any hubs that are no longer in the config
-          const validOrder = order.filter(iata => HUBS.some(h => h.iata === iata));
-          HUBS.sort((a, b) => validOrder.indexOf(a.iata) - validOrder.indexOf(b.iata));
-      }
-  }
-
   for (const hub of HUBS) {
     try {
       let wx;
@@ -352,31 +341,50 @@ async function updateAdvisories() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Fetch all possible hubs first
+  const activeHubsPromise = getHubs();
+  const inactiveHubsPromise = fetch('/api/hubs/inactive').then(res => res.json());
+  const [defaultActiveHubs, defaultInactiveHubs] = await Promise.all([activeHubsPromise, inactiveHubsPromise]);
+  const allHubsMap = new Map([...defaultActiveHubs, ...defaultInactiveHubs].map(h => [h.iata, h]));
+
   // Cookie consent check
   const consent = getCookie("cookie_consent");
   if (consent === null) {
       const banner = document.getElementById('cookie-consent-banner');
-      banner.style.display = 'block';
+      if(banner) banner.style.display = 'block';
 
-      document.getElementById('cookie-accept').addEventListener('click', () => {
+      document.getElementById('cookie-accept')?.addEventListener('click', () => {
           setCookie("cookie_consent", "true", 365);
-          banner.style.display = 'none';
+          if(banner) banner.style.display = 'none';
           // Save default order on accept
-          const defaultOrder = HUBS.map(h => h.iata).join(',');
+          const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
           setCookie("card_order", defaultOrder, 365);
-          initSortable();
       });
 
-      document.getElementById('cookie-decline').addEventListener('click', () => {
+      document.getElementById('cookie-decline')?.addEventListener('click', () => {
           setCookie("cookie_consent", "false", 365);
-          banner.style.display = 'none';
+          if(banner) banner.style.display = 'none';
       });
   }
 
+  // Determine which hubs to load based on cookie
+  let hubsToLoad = defaultActiveHubs; // Default
+  if (getCookie("cookie_consent") === "true") {
+      const savedOrder = getCookie("card_order");
+      if (savedOrder && savedOrder.length > 0) {
+          const order = savedOrder.split(',');
+          hubsToLoad = order.map(iata => allHubsMap.get(iata)).filter(Boolean);
+      } else {
+          // If consent is given but no order is saved (or is empty), save the default.
+          const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
+          setCookie("card_order", defaultOrder, 365);
+          hubsToLoad = defaultActiveHubs;
+      }
+  }
+  HUBS = hubsToLoad;
+
   // Main dashboard logic
-  HUBS = await getHubs();
   await updateAdvisories();
-  
   await loadDashboard();
   await fetchDbStatus();
   

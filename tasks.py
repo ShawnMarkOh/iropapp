@@ -27,7 +27,8 @@ def data_refresh_job(app, socketio):
             new_ground_delays = services.fetch_faa_ground_delays()
 
             data_changed_snapshot = False
-            for hub in config.HUBS:
+            all_hubs = config.HUBS + config.INACTIVE_HUBS
+            for hub in all_hubs:
                 iata = hub["iata"]
                 # Fetch fresh weather data
                 weather_data = services.fetch_and_log_weather(iata)
