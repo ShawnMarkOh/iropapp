@@ -48,9 +48,9 @@ function analyzeRunwaySafety(runways, windDir, windKts) {
 function getHourRisk(forecast) {if (!forecast) return {risk:"clear", key:null, hourClass: "hour-clear"};let forecastL = forecast.toLowerCase();if (/thunderstorms likely|severe thunderstorm|severe t[- ]?storm|tstm likely|t\.storm likely|t[- ]?storm likely/.test(forecastL)) {return { risk: "high", key: "Thunder", hourClass: "hour-thunder" };}if (/thunderstorm|tstm|t-storm|t\.storm/.test(forecastL)) {if (/slight chance|chance/.test(forecastL)) {return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}return { risk: "partial", key: "Thunder", hourClass: "hour-other" };}if (/severe|tornado|hail|damaging wind|squall|snow|blizzard|ice|sleet|wintry|freezing rain|freezing drizzle/.test(forecastL)) {return { risk: "high", key: "Severe", hourClass: "hour-severe" };}if (/heavy rain|flood|downpour|fog|low visibility|low clouds/.test(forecastL)) {return { risk: "partial", key: null, hourClass: "hour-other" };}return { risk: "clear", key: null, hourClass: "hour-clear" };}
 function formatLocalDateOnly(dtIso, tz) {try {const d = new Date(dtIso);return new Intl.DateTimeFormat('en-US', {weekday: "short", month: "short", day: "numeric", year: "numeric",timeZone: tz}).format(d);} catch { return dtIso; }}
 function getDailyAssessment(percentHigh, percentPartial) {
-    if (percentHigh >= 30)
+    if (percentHigh >= 30 || percentPartial > 50)
         return { label: "⚠️ High IROPS Risk", class: "risk-high", summary: "High IROPS risk" };
-    if (percentHigh >= 25)
+    if (percentHigh >= 25 || percentPartial > 40)
         return { label: "🟧 Moderate IROPS Risk", class: "risk-moderate", summary: "Moderate IROPS risk" };
     if (percentHigh >= 10 || percentPartial >= 30)
         return { label: "⛅ Partial IROPS Risk", class: "risk-partial", summary: "Partial IROPS risk" };
