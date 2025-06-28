@@ -2,9 +2,11 @@
 
 import os
 import pytz
+import json
 from datetime import datetime
 
 from flask import jsonify, render_template, send_from_directory, request
+from sqlalchemy import desc
 
 import config
 import services
@@ -38,7 +40,6 @@ def init_routes(app):
     @app.route("/api/weather/<iata>")
     def weather_api(iata):
         iata = iata.upper()
-        now = datetime.now()
         req_date = request.args.get('date')
         all_hubs = config.HUBS + config.INACTIVE_HUBS
         hub = next((h for h in all_hubs if h["iata"] == iata), None)
@@ -46,58 +47,56 @@ def init_routes(app):
             return jsonify({"error": "Unknown IATA code"}), 404
         tz = pytz.timezone(hub["tz"])
 
-        if req_date:
-            local_now = datetime.strptime(req_date, "%Y-%m-%d").replace(tzinfo=tz)
-            local_today_str = req_date
-        else:
-            local_now = now.astimezone(tz)
-            local_today_str = local_now.strftime("%Y-%m-%d")
+        local_date_str = req_date or datetime.now(tz).strftime("%Y-%m-%d")
 
-        is_today = (local_today_str == datetime.now(tz).strftime("%Y-%m-%d"))
+        # Default structure for the output
+        data_out = {
+            "hourly": [], "daily": [], "timezone": tz.zone, "sirs": [],
+            "terminal_constraints": [], "faa_events": [], "alerts": []
+        }
 
-        db_hours = HourlyWeather.query.filter_by(iata=iata, date=local_today_str).order_by(HourlyWeather.start_time).all()
+        # Get all historically logged hours for the requested date from HourlyWeather
+        db_hours = HourlyWeather.query.filter_by(iata=iata, date=local_date_str).order_by(HourlyWeather.start_time).all()
         logged_by_time = {h.start_time: h.as_dict() for h in db_hours}
 
-        data = services.fetch_and_log_weather(iata) if is_today else None
+        # For both today and archive views, we now primarily rely on snapshots.
+        # This prevents slow, on-demand external API calls from this route.
+        latest_snapshot = HourlySnapshot.query.filter_by(
+            iata=iata, date=local_date_str
+        ).order_by(desc(HourlySnapshot.hour)).first()
 
+        forecast_data = None
+        if latest_snapshot:
+            snapshot_content = json.loads(latest_snapshot.snapshot_json)
+            forecast_data = snapshot_content.get("weather")
+            data_out["sirs"] = snapshot_content.get("sirs", [])
+            data_out["terminal_constraints"] = snapshot_content.get("terminal_constraints", [])
+            data_out["faa_events"] = snapshot_content.get("faa_events", [])
+            if forecast_data:
+                data_out["daily"] = forecast_data.get("daily", [])
+                data_out["alerts"] = forecast_data.get("alerts", [])
+
+        # --- MERGE LOGIC ---
+        # This logic combines past data (from HourlyWeather) with the most recent forecast
+        # (from the latest snapshot of the day), prioritizing the actual logged data.
         result_hourly = []
-        if is_today: # Corrected line: removed trailing 'and'
-            now_dt = datetime.now(tz)
-            seen = set()
-            # Ensure data is not None and has "hourly" key before trying to iterate
-            if data and "hourly" in data:
-                for period in data.get("hourly", []):
-                    dt = datetime.fromisoformat(period["startTime"].replace("Z", "+00:00")).astimezone(tz)
-                    key = period["startTime"]
-                    if dt <= now_dt and key in logged_by_time:
-                        result_hourly.append(logged_by_time[key])
-                        seen.add(key)
-                    else:
-                        result_hourly.append(period)
-                        seen.add(key)
-            
-            for key, val in logged_by_time.items():
-                if key not in seen:
-                    result_hourly.append(val)
-            
-            result_hourly.sort(key=lambda x: x["startTime"])
-            data_out = data or {} # if 'data' is None (e.g., fetch failed), this makes data_out = {}
-            data_out["hourly"] = result_hourly
-            data_out["timezone"] = tz.zone
-        else:
-            result_hourly = list(logged_by_time.values())
-            result_hourly.sort(key=lambda x: x["startTime"])
-            data_out = {
-                "hourly": result_hourly,
-                "daily": [],
-                "timezone": tz.zone
-            }
+        seen = set()
 
-        merged_log = services.load_daily_log()
-        data_out["sirs"] = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
-        data_out["terminal_constraints"] = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
-        faa_events = services.get_events_for_hub_day(iata, local_now, hub["tz"])
-        data_out["faa_events"] = faa_events
+        # 1. Prioritize all logged historical data for the day.
+        for key, val in logged_by_time.items():
+            result_hourly.append(val)
+            seen.add(key)
+
+        # 2. Fill in the rest from the snapshot's forecast, avoiding duplicates.
+        if forecast_data and "hourly" in forecast_data:
+            for period in forecast_data.get("hourly", []):
+                key = period["startTime"]
+                if key not in seen:
+                    result_hourly.append(period)
+                    # No need to add to seen, as we won't loop over forecast_data again.
+
+        result_hourly.sort(key=lambda x: x["startTime"])
+        data_out["hourly"] = result_hourly
 
         return jsonify(data_out)
     
