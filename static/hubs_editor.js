@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const hubPresets = {
         'default': ['CLT', 'PHL', 'DCA', 'DAY', 'DFW'],
         'preset2': ['CLT', 'PHL'],
-        'preset3': ['DFW', 'ORD']
+        'preset3': ['PHL', 'CLT', 'MDT']
     };
 
     function renderHub(hub) {
