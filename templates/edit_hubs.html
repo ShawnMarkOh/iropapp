@@ -52,7 +52,22 @@
     </nav>
 
     <main class="container my-4">
-        <h1 class="mb-4">Edit Hubs</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div>
+                <h1 class="mb-0">Edit Hubs</h1>
+                <p class="text-muted mb-0">Drag and drop hubs to reorder, or move them between active and inactive lists. You can also load a preset.</p>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="hub-presets-dropdown-page" data-bs-toggle="dropdown" aria-expanded="false">
+                    Load Preset
+                </button>
+                <ul class="dropdown-menu hub-presets-dropdown" aria-labelledby="hub-presets-dropdown-page">
+                    <li><a class="dropdown-item" href="#" data-preset="default">Default (CLT, PHL, DCA, DAY, DFW)</a></li>
+                    <li><a class="dropdown-item" href="#" data-preset="preset2">Preset 2 (CLT, PHL)</a></li>
+                    <li><a class="dropdown-item" href="#" data-preset="preset3">Preset 3 (DFW, ORD)</a></li>
+                </ul>
+            </div>
+        </div>
         <div class="row">
             <div class="col-md-6">
                 <div class="card">

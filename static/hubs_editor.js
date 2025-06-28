@@ -30,6 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    const hubPresets = {
+        'default': ['CLT', 'PHL', 'DCA', 'DAY', 'DFW'],
+        'preset2': ['CLT', 'PHL'],
+        'preset3': ['DFW', 'ORD']
+    };
+
     function renderHub(hub) {
         return `
             <div class="card mb-3" data-iata="${hub.iata}">
@@ -85,6 +91,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function applyHubPreset(presetName, allHubsMap) {
+        const presetOrder = hubPresets[presetName];
+        if (!presetOrder) return;
+    
+        const activeHubs = presetOrder.map(iata => allHubsMap.get(iata)).filter(Boolean);
+        const activeIataSet = new Set(presetOrder);
+        const inactiveHubs = [...allHubsMap.values()].filter(hub => !activeIataSet.has(hub.iata));
+    
+        activeHubsContainer.innerHTML = activeHubs.map(renderHub).join('');
+        inactiveHubsContainer.innerHTML = inactiveHubs.map(renderHub).join('');
+        
+        saveHubOrder();
+    }
+
     function loadHubs(defaultActiveHubs, defaultInactiveHubs) {
         const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
         const allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
@@ -136,6 +156,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         loadHubs(defaultActiveHubs, defaultInactiveHubs);
+
+        const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
+        const allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
+
+        document.querySelectorAll('.hub-presets-dropdown').forEach(dropdown => {
+            dropdown.addEventListener('click', (event) => {
+                if (event.target.matches('.dropdown-item')) {
+                    event.preventDefault();
+                    const presetName = event.target.dataset.preset;
+                    applyHubPreset(presetName, allHubsMap);
+                }
+            });
+        });
 
         new Sortable(activeHubsContainer, {
             group: 'shared-hubs',

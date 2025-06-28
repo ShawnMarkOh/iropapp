@@ -75,8 +75,20 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted">Drag and drop hubs between the "Active" and "Inactive" lists. The order of hubs in the "Active" list will be saved and reflected on the dashboard.</p>
-                    <div class="row mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <p class="text-muted mb-0">Drag and drop hubs to reorder, or move them between active and inactive lists. You can also load a preset.</p>
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="hub-presets-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                Load Preset
+                            </button>
+                            <ul class="dropdown-menu hub-presets-dropdown" aria-labelledby="hub-presets-dropdown">
+                                <li><a class="dropdown-item" href="#" data-preset="default">Default (CLT, PHL, DCA, DAY, DFW)</a></li>
+                                <li><a class="dropdown-item" href="#" data-preset="preset2">Preset 2 (CLT, PHL)</a></li>
+                                <li><a class="dropdown-item" href="#" data-preset="preset3">Preset 3 (DFW, ORD)</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="row">
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header">
