@@ -22,6 +22,25 @@ function getCookie(name) {
 
 // Global variables
 let HUBS = [];
+let allHubsMap;
+let defaultActiveHubs;
+
+async function initializeHubs() {
+    let hubsToLoad = defaultActiveHubs; // Default
+    if (getCookie("cookie_consent") === "true") {
+        const savedOrder = getCookie("card_order");
+        if (savedOrder && savedOrder.length > 0) {
+            const order = savedOrder.split(',');
+            hubsToLoad = order.map(iata => allHubsMap.get(iata)).filter(Boolean);
+        } else {
+            // If consent is given but no order is saved (or is empty), save the default.
+            const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
+            setCookie("card_order", defaultOrder, 365);
+            hubsToLoad = defaultActiveHubs;
+        }
+    }
+    HUBS = hubsToLoad;
+}
 window.FAA_EVENT_DEFINITIONS = {};
 window.FAA_LITERAL_TRANSLATIONS = {};
 let FAA_EVENTS = {};
@@ -344,8 +363,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Fetch all possible hubs first
   const activeHubsPromise = getHubs();
   const inactiveHubsPromise = fetch('/api/hubs/inactive').then(res => res.json());
-  const [defaultActiveHubs, defaultInactiveHubs] = await Promise.all([activeHubsPromise, inactiveHubsPromise]);
-  const allHubsMap = new Map([...defaultActiveHubs, ...defaultInactiveHubs].map(h => [h.iata, h]));
+  const [dActiveHubs, defaultInactiveHubs] = await Promise.all([activeHubsPromise, inactiveHubsPromise]);
+  defaultActiveHubs = dActiveHubs;
+  allHubsMap = new Map([...defaultActiveHubs, ...defaultInactiveHubs].map(h => [h.iata, h]));
 
   // Cookie consent check
   const consent = getCookie("cookie_consent");
@@ -367,21 +387,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
   }
 
-  // Determine which hubs to load based on cookie
-  let hubsToLoad = defaultActiveHubs; // Default
-  if (getCookie("cookie_consent") === "true") {
-      const savedOrder = getCookie("card_order");
-      if (savedOrder && savedOrder.length > 0) {
-          const order = savedOrder.split(',');
-          hubsToLoad = order.map(iata => allHubsMap.get(iata)).filter(Boolean);
-      } else {
-          // If consent is given but no order is saved (or is empty), save the default.
-          const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
-          setCookie("card_order", defaultOrder, 365);
-          hubsToLoad = defaultActiveHubs;
-      }
-  }
-  HUBS = hubsToLoad;
+  await initializeHubs();
 
   // Main dashboard logic
   await updateAdvisories();
@@ -402,5 +408,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadDashboard(true);
       await fetchDbStatus();
     });
+  }
+
+  const editHubsModal = document.getElementById('editHubsModal');
+  if (editHubsModal) {
+      editHubsModal.addEventListener('hidden.bs.modal', async () => {
+          await initializeHubs();
+          await loadDashboard(true);
+      });
   }
 });

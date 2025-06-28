@@ -19,10 +19,6 @@ def init_routes(app):
     def calendar_view():
         return render_template("calendar.html")
 
-    @app.route("/edit-hubs")
-    def edit_hubs_view():
-        return render_template("edit_hubs.html")
-
     @app.route("/api-docs")
     def api_docs():
         return render_template("api_docs.html")

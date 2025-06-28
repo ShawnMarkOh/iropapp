@@ -133,6 +133,18 @@ body {
 .card.sortable-chosen {
     cursor: grabbing;
 }
+.hubs-list {
+    min-height: 200px;
+    border-radius: var(--border-radius);
+    background-color: var(--bs-tertiary-bg);
+    padding: 1rem;
+}
+.hubs-list .card {
+    cursor: grab;
+}
+.hubs-list .card:active {
+    cursor: grabbing;
+}
 .card-body {
     display: flex;
     flex-direction: column;

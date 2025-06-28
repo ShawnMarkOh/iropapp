@@ -101,27 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Cookie consent check
-        const consent = getCookie("cookie_consent");
-        if (consent === null) {
-            const banner = document.getElementById('cookie-consent-banner');
-            if(banner) banner.style.display = 'block';
-
-            document.getElementById('cookie-accept')?.addEventListener('click', () => {
-                setCookie("cookie_consent", "true", 365);
-                if(banner) banner.style.display = 'none';
-                // Save default order on accept
-                const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
-                setCookie("card_order", defaultOrder, 365);
-                loadHubs(defaultActiveHubs, defaultInactiveHubs);
-            });
-
-            document.getElementById('cookie-decline')?.addEventListener('click', () => {
-                setCookie("cookie_consent", "false", 365);
-                if(banner) banner.style.display = 'none';
-            });
-        }
-
         loadHubs(defaultActiveHubs, defaultInactiveHubs);
 
         new Sortable(activeHubsContainer, {
