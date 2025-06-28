@@ -49,6 +49,7 @@ let groundDelays = {};
 let allDayBaseData = [[],[],[]]; // Store all data globally for lazy loading
 let dayLabels = [];
 let dailyBrief = [{}, {}, {}];
+let fullDailyBrief = [{}, {}, {}];
 let sortable = null; // To hold the Sortable instance
 
 function renderFinalDashboard(localDayLabels, localDailyBrief, isUpdate) {
@@ -297,12 +298,14 @@ async function loadDashboard(isUpdate = false) {
       }
       allDone++;
       if (allDone === hubsToFetch.length) {
+        fullDailyBrief = JSON.parse(JSON.stringify(localDailyBrief)); // Deep copy and store the full brief
         renderFinalDashboard(localDayLabels, localDailyBrief, isUpdate);
       }
     } catch (err) {
       console.error(`Failed to load data for ${hub.iata}:`, err);
       allDone++;
       if (allDone === hubsToFetch.length) {
+        fullDailyBrief = JSON.parse(JSON.stringify(localDailyBrief)); // Deep copy and store the full brief
         renderFinalDashboard(localDayLabels, localDailyBrief, isUpdate);
       }
     }
@@ -466,16 +469,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Re-initialize hubs based on the new order
         await initializeHubs();
         
-        // Re-render the dashboard with the new hub order from existing data
-        const activeIatas = new Set(HUBS.map(h => h.iata));
-        const activeHubOrder = HUBS.map(h => h.iata);
-        const filteredData = allDayBaseData.map(dayData => {
-            const filtered = dayData.filter(card => activeIatas.has(card.iata));
-            filtered.sort((a, b) => activeHubOrder.indexOf(a.iata) - activeHubOrder.indexOf(b.iata));
-            return filtered;
-        });
-        
-        renderDashboard(filteredData, dayLabels, dailyBrief, true);
+        // Re-render the dashboard. This will use the new HUBS list to filter
+        // the full data and briefing.
+        renderFinalDashboard(dayLabels, fullDailyBrief, true);
         initSortable();
       }
     });
