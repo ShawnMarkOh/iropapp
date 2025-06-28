@@ -1,3 +1,25 @@
+// Cookie helpers
+function setCookie(name, value, days) {
+    let expires = "";
+    if (days) {
+        let date = new Date();
+        date.setTime(date.getTime() + (days*24*60*60*1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "")  + expires + "; path=/; SameSite=Lax";
+}
+
+function getCookie(name) {
+    let nameEQ = name + "=";
+    let ca = document.cookie.split(';');
+    for(let i=0;i < ca.length;i++) {
+        let c = ca[i];
+        while (c.charAt(0)==' ') c = c.substring(1,c.length);
+        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+    }
+    return null;
+}
+
 // Global variables
 let HUBS = [];
 window.FAA_EVENT_DEFINITIONS = {};
@@ -6,6 +28,7 @@ let FAA_EVENTS = {};
 let groundStops = {};
 let groundDelays = {};
 let allDayBaseData = [[],[],[]]; // Store all data globally for lazy loading
+let sortable = null; // To hold the Sortable instance
 
 async function loadDashboard(isUpdate = false) {
   const dashboard = document.getElementById('dashboard');
@@ -19,6 +42,17 @@ async function loadDashboard(isUpdate = false) {
   
   // Reset global data
   allDayBaseData = [[],[],[]];
+
+  const consent = getCookie("cookie_consent");
+  if (consent === "true") {
+      const savedOrder = getCookie("card_order");
+      if (savedOrder) {
+          const order = savedOrder.split(',');
+          // Filter out any hubs that are no longer in the config
+          const validOrder = order.filter(iata => HUBS.some(h => h.iata === iata));
+          HUBS.sort((a, b) => validOrder.indexOf(a.iata) - validOrder.indexOf(b.iata));
+      }
+  }
 
   for (const hub of HUBS) {
     try {
@@ -212,6 +246,7 @@ async function loadDashboard(isUpdate = false) {
         renderDashboard(allDayBaseData, dayLabels, dailyBrief, isUpdate);
         if (!isUpdate) {
             setupAccordionListeners();
+            initSortable();
         }
       }
     } catch (err) {
@@ -221,10 +256,33 @@ async function loadDashboard(isUpdate = false) {
         renderDashboard(allDayBaseData, dayLabels, dailyBrief, isUpdate);
         if (!isUpdate) {
             setupAccordionListeners();
+            initSortable();
         }
       }
     }
   }
+}
+
+function initSortable() {
+    const consent = getCookie("cookie_consent");
+    if (consent !== "true") return;
+
+    const grid = document.querySelector('#day-0-container .row');
+    if (grid) {
+        if (sortable) {
+            sortable.destroy();
+        }
+        sortable = new Sortable(grid, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            onEnd: function (evt) {
+                const cardElements = Array.from(grid.children);
+                const newOrder = cardElements.map(el => el.id.split('-')[1]);
+                setCookie("card_order", newOrder.join(','), 365);
+            }
+        });
+    }
 }
 
 function setupAccordionListeners() {
@@ -294,6 +352,27 @@ async function updateAdvisories() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Cookie consent check
+  const consent = getCookie("cookie_consent");
+  if (consent === null) {
+      const banner = document.getElementById('cookie-consent-banner');
+      banner.style.display = 'block';
+
+      document.getElementById('cookie-accept').addEventListener('click', () => {
+          setCookie("cookie_consent", "true", 365);
+          banner.style.display = 'none';
+          // Save default order on accept
+          const defaultOrder = HUBS.map(h => h.iata).join(',');
+          setCookie("card_order", defaultOrder, 365);
+          initSortable();
+      });
+
+      document.getElementById('cookie-decline').addEventListener('click', () => {
+          setCookie("cookie_consent", "false", 365);
+          banner.style.display = 'none';
+      });
+  }
+
   // Main dashboard logic
   HUBS = await getHubs();
   await updateAdvisories();
