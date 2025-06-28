@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const hubPresets = {
         'default': ['CLT', 'PHL', 'DCA', 'DAY', 'DFW'],
-        'preset2': ['CLT', 'PHL'],
+        'preset2': ['CLT', 'MIA'],
         'preset3': ['PHL', 'CLT', 'MDT']
     };
 
