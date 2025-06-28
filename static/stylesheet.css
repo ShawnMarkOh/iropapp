@@ -132,10 +132,10 @@ body {
 }
 
 @keyframes soft-flash {
-  0%, 100% {
+  from {
     opacity: 0;
   }
-  50% {
+  to {
     opacity: 1;
   }
 }
@@ -152,7 +152,7 @@ body {
   bottom: -1px;
   border-radius: var(--border-radius);
   box-shadow: 0 0 12px 2px var(--risk-high-bg);
-  animation: soft-flash 1.5s infinite ease-in-out backwards;
+  animation: soft-flash 0.75s ease-in-out infinite alternate backwards;
   z-index: -1;
   pointer-events: none;
 }
