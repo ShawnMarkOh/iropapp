@@ -36,7 +36,8 @@ def init_routes(app):
         iata = iata.upper()
         now = datetime.now()
         req_date = request.args.get('date')
-        hub = next((h for h in config.HUBS if h["iata"] == iata), None)
+        all_hubs = config.HUBS + config.INACTIVE_HUBS
+        hub = next((h for h in all_hubs if h["iata"] == iata), None)
         if not hub:
             return jsonify({"error": "Unknown IATA code"}), 404
         tz = pytz.timezone(hub["tz"])
@@ -112,7 +113,8 @@ def init_routes(app):
         # This endpoint's direct FAA dependency is being deprecated in favor of 
         # background fetching. Returning empty data for now.
         output = {}
-        for hub in config.HUBS:
+        all_hubs = config.HUBS + config.INACTIVE_HUBS
+        for hub in all_hubs:
             output[hub["iata"]] = []
         return jsonify(output)
 

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from xml.etree import ElementTree
 from bs4 import BeautifulSoup
 
-from config import HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
+from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
 from database import db, HourlyWeather, HourlySnapshot
 
 def load_daily_log():
@@ -40,7 +40,8 @@ def get_latlon_for_hub(iata):
     return lookup.get(iata, (None, None))
 
 def get_nws_grid(iata):
-    for hub in HUBS:
+    all_hubs = HUBS + INACTIVE_HUBS
+    for hub in all_hubs:
         if hub["iata"] == iata:
             lat, lon = get_latlon_for_hub(hub["iata"])
             if lat and lon:
