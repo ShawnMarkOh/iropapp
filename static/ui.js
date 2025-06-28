@@ -71,6 +71,8 @@ function renderBaseCard(card) {
           
           if (h.isGroundStop) {
             exclamations += ` <span class="ground-stop-mark" title="Ground Stop until ${card.groundStop.end_time}">🛑</span>`;
+          } else if (card.groundDelay) {
+            exclamations += ` <span class="faa-event-mark" title="Ground Delay: ${card.groundDelay.reason} (avg ${card.groundDelay.avg_delay})">❗</span>`;
           }
 
           return `<div class="hour-cell ${h.hourClass} ${h.isGroundStop ? 'hour-ground-stop' : ''}" 
