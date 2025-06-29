@@ -29,6 +29,14 @@ class Hub(db.Model):
     display_order = db.Column(db.Integer, default=0, nullable=False)
 
     def as_dict(self):
+        runways = []
+        try:
+            if self.runways_json:
+                runways = json.loads(self.runways_json)
+        except json.JSONDecodeError:
+            print(f"Warning: Could not decode runways_json for hub {self.iata}. Returning empty list for runways.")
+            pass # runways is already initialized to []
+        
         return {
             "iata": self.iata,
             "name": self.name,
@@ -36,7 +44,7 @@ class Hub(db.Model):
             "tz": self.tz,
             "lat": self.lat,
             "lon": self.lon,
-            "runways": json.loads(self.runways_json)
+            "runways": runways
         }
 
 class HourlyWeather(db.Model):
