@@ -50,13 +50,11 @@ function renderBaseCard(card) {
           ${card.detailedForecast || "Detailed forecast not available."}
         </div>
       </details>
-      ${card.aviationForecast ? `
       <div class="d-grid mb-2">
-        <button class="btn btn-sm btn-outline-secondary" type="button" onclick='showAviationForecastModal(${JSON.stringify(card.aviationForecast)}, ${JSON.stringify(card.iata)})'>
+        <button class="btn btn-sm btn-outline-secondary" type="button" onclick='showAviationForecastModal(${JSON.stringify(card.iata)})'>
           Aviation Forecast Discussion
         </button>
       </div>
-      ` : ''}
       <div class="risk-assessment ${card.riskClass} mb-2">
         <div class="risk-label">${card.riskLabel}</div>
         <div class="risk-percentages">
@@ -367,13 +365,26 @@ function showHourModal(block, base) {
   modal.show();
 }
 
-function showAviationForecastModal(forecastText, hubIata) {
+async function showAviationForecastModal(hubIata) {
   const modal = new bootstrap.Modal(document.getElementById('aviationForecastModal'));
   const modalLabel = document.getElementById('aviationForecastModalLabel');
   const modalBody = document.getElementById('aviationForecastModalBody');
 
   modalLabel.textContent = `Aviation Forecast Discussion for ${hubIata}`;
-  modalBody.innerHTML = `<pre>${forecastText}</pre>`;
-  
+  modalBody.innerHTML = `<div class="text-center p-4"><div class="spinner-border text-primary" role="status"></div><div class="mt-2">Loading...</div></div>`;
   modal.show();
+
+  try {
+    const response = await fetch(`/api/aviation-forecast-discussion/${hubIata}`);
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch forecast discussion.' }));
+        throw new Error(errorData.error || 'Failed to fetch forecast discussion.');
+    }
+    const data = await response.json();
+    const forecastText = data.forecast || 'No forecast discussion available.';
+    modalBody.innerHTML = `<pre>${forecastText}</pre>`;
+  } catch (error) {
+    console.error('Error fetching aviation forecast discussion:', error);
+    modalBody.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+  }
 }

@@ -274,6 +274,27 @@ def init_routes(app, bcrypt):
         result = [h.as_dict() for h in hours]
         return jsonify(result)
 
+    @app.route("/api/aviation-forecast-discussion/<iata>")
+    def aviation_forecast_discussion_api(iata):
+        hub = Hub.query.filter_by(iata=iata.upper()).first()
+        if not hub:
+            return jsonify({"error": "Unknown IATA code"}), 404
+        
+        try:
+            grid = services.get_nws_grid(hub.iata)
+            if not grid or not grid.get("cwa"):
+                return jsonify({"error": f"Could not determine forecast center (CWA) for {hub.iata}."}), 404
+            
+            discussion = services.fetch_aviation_forecast_discussion(grid.get("cwa"))
+            
+            if discussion is None:
+                return jsonify({"forecast": "Aviation forecast discussion is currently unavailable for this area."})
+
+            return jsonify({"forecast": discussion})
+        except Exception as e:
+            print(f"Error in aviation_forecast_discussion_api for {iata}: {e}")
+            return jsonify({"error": "An unexpected error occurred."}), 500
+
     @app.route("/api/groundstops")
     def groundstops_api():
         stops = config.GROUND_STOPS_CACHE.get("json")
