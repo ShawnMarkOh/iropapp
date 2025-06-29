@@ -36,27 +36,6 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# --- CLI Commands ---
-@click.command('create-admin')
-@with_appcontext
-@click.argument('username')
-@click.argument('password')
-def create_admin_command(username, password):
-    """Creates a new admin user."""
-    existing_user = User.query.filter_by(username=username).first()
-    if existing_user:
-        print(f"User '{username}' already exists.")
-        return
-    
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-    new_user = User(username=username, password_hash=hashed_password)
-    db.session.add(new_user)
-    db.session.commit()
-    print(f"Admin user '{username}' created successfully.")
-
-app.cli.add_command(create_admin_command)
-
-
 # --- Database and Routes Setup ---
 def seed_database(app_instance):
     with app_instance.app_context():
@@ -98,10 +77,42 @@ def seed_database(app_instance):
             db.session.commit()
             print("Database seeded successfully.")
 
+def create_or_update_admin(app_instance):
+    """Creates or updates the admin user from environment variables."""
+    with app_instance.app_context():
+        admin_user = os.environ.get('ADMIN_USERNAME')
+        admin_pass = os.environ.get('ADMIN_PASSWORD')
+
+        if not admin_user or not admin_pass:
+            if not User.query.first():
+                print("WARNING: No admin credentials set in environment variables (ADMIN_USERNAME, ADMIN_PASSWORD) and no users exist in the database.")
+                print("The application will not have an admin user. Please set the variables in your .env file.")
+            return
+
+        user = User.query.filter_by(username=admin_user).first()
+        hashed_password = bcrypt.generate_password_hash(admin_pass).decode('utf-8')
+
+        if user:
+            # If password hash is different, update it
+            if not bcrypt.check_password_hash(user.password_hash, admin_pass):
+                print(f"Admin user '{admin_user}' found. Updating password.")
+                user.password_hash = hashed_password
+            else:
+                print(f"Admin user '{admin_user}' found. Password is unchanged.")
+        else:
+            print(f"Creating admin user '{admin_user}'.")
+            user = User(username=admin_user, password_hash=hashed_password)
+            db.session.add(user)
+        
+        db.session.commit()
+        print("Admin user configured.")
+
 # Create database tables if they don't exist
 init_db(app)
-# Seed the database if needed
+# Seed the database with hub info if it's empty
 seed_database(app)
+# Create or update the admin user from environment variables
+create_or_update_admin(app)
 
 # Register all the routes from routes.py
 init_routes(app, bcrypt)
