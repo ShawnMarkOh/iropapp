@@ -24,11 +24,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeHubsContainer = document.getElementById('active-hubs-container');
     const inactiveHubsContainer = document.getElementById('inactive-hubs-container');
     const socket = typeof io !== 'undefined' ? io() : null;
+    let allHubsMap; // Will be populated in init()
 
     // If the editor elements aren't on the page, don't initialize.
     if (!activeHubsContainer || !inactiveHubsContainer) {
         return;
     }
+
+    // Listen for newly added hubs from the other modal
+    document.addEventListener('newHubAdded', (e) => {
+        const newHub = e.detail;
+        if (newHub && inactiveHubsContainer) {
+            // Check if it's already in the DOM to prevent duplicates
+            if (document.querySelector(`.card[data-iata="${newHub.iata}"]`)) {
+                return;
+            }
+            if (allHubsMap) {
+                allHubsMap.set(newHub.iata, newHub);
+            }
+            
+            // Add the new hub card to the inactive list
+            const inactivePlaceholder = inactiveHubsContainer.querySelector('p.text-muted');
+            if (inactivePlaceholder) {
+                inactivePlaceholder.remove();
+            }
+            inactiveHubsContainer.insertAdjacentHTML('beforeend', renderHub(newHub));
+        }
+    });
 
     const hubPresets = {
         'default': ['CLT', 'PHL', 'DCA', 'DAY', 'DFW'],
@@ -107,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadHubs(defaultActiveHubs, defaultInactiveHubs) {
         const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
-        const allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
+        allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
 
         let activeHubs = [];
         let inactiveHubs = [];
@@ -157,8 +179,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loadHubs(defaultActiveHubs, defaultInactiveHubs);
 
+        // This is the allHubsMap for this module instance.
         const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
-        const allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
+        allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
 
         document.querySelectorAll('.hub-presets-dropdown').forEach(dropdown => {
             dropdown.addEventListener('click', (event) => {

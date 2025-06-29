@@ -24,6 +24,7 @@ function getCookie(name) {
 let HUBS = [];
 let allHubsMap;
 let defaultActiveHubs;
+let defaultInactiveHubs;
 
 async function initializeHubs() {
     let hubsToLoad = defaultActiveHubs; // Default
@@ -417,9 +418,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Fetch all possible hubs first
   const activeHubsPromise = getHubs();
   const inactiveHubsPromise = fetch('/api/hubs/inactive').then(res => res.json());
-  const [dActiveHubs, defaultInactiveHubs] = await Promise.all([activeHubsPromise, inactiveHubsPromise]);
+  const [dActiveHubs, dInactiveHubs] = await Promise.all([activeHubsPromise, inactiveHubsPromise]);
   defaultActiveHubs = dActiveHubs;
+  defaultInactiveHubs = dInactiveHubs;
   allHubsMap = new Map([...defaultActiveHubs, ...defaultInactiveHubs].map(h => [h.iata, h]));
+  window.allHubsMap = allHubsMap; // Expose globally for airport_adder
 
   // Cookie consent check
   const consent = getCookie("cookie_consent");
@@ -563,4 +566,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           importForm.reset();
       });
   }
+
+  // Listen for a new hub being added by airport_adder.js
+  document.addEventListener('newHubAdded', (e) => {
+    const newHub = e.detail;
+    if (newHub && !allHubsMap.has(newHub.iata)) {
+        allHubsMap.set(newHub.iata, newHub);
+        defaultInactiveHubs.push(newHub);
+        console.log(`New hub ${newHub.iata} added to the application map.`);
+    }
+  });
 });
