@@ -28,11 +28,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errorMsg);
             }
             const airportRespText = await airportResp.text();
-            const preMatch = airportRespText.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
-            if (!preMatch || !preMatch[1]) {
-                throw new Error('No valid data found for that ICAO code. The airport may not exist or the API is unavailable.');
+            let airportJson;
+
+            try {
+                // First, try to parse the whole response as JSON. This handles the direct JSON case.
+                airportJson = JSON.parse(airportRespText);
+            } catch (e) {
+                // If that fails, it might be HTML with a <pre> tag.
+                const preMatch = airportRespText.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);
+                if (preMatch && preMatch[1]) {
+                    try {
+                        airportJson = JSON.parse(preMatch[1]);
+                    } catch (e2) {
+                        throw new Error('Found a <pre> tag, but its content is not valid JSON.');
+                    }
+                } else {
+                    // If no JSON and no <pre> tag, then we can't handle it.
+                    throw new Error('No valid data found for that ICAO code. The airport may not exist or the API is unavailable.');
+                }
             }
-            const airportJson = JSON.parse(preMatch[1]);
+
             const airportData = airportJson[0];
 
             if (!airportData || !airportData.iataId) {

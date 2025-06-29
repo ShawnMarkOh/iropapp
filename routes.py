@@ -48,8 +48,8 @@ def init_routes(app):
             url = f"https://aviationweather.gov/api/data/airport?ids={icao.upper()}&format=json"
             resp = requests.get(url, timeout=15)
             resp.raise_for_status()
-            # The external API returns HTML with JSON in a <pre> tag.
-            # We just pass the text content through.
+            # The external API may return direct JSON or HTML with JSON in a <pre> tag.
+            # We just pass the content through and let the client handle parsing.
             return resp.text, resp.status_code, {'Content-Type': resp.headers.get('Content-Type')}
         except requests.RequestException as e:
             error_message = f"Failed to fetch data from aviationweather.gov: {e}"
