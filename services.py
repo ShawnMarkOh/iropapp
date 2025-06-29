@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
+from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE, AVIATION_FORECAST_DISCUSSION_CACHE
 from database import db, HourlyWeather, HourlySnapshot
 
 NWS_GRID_CACHE = {}
@@ -49,7 +49,8 @@ def get_nws_grid(iata):
                     "forecast": props["forecast"],
                     "forecastHourly": props["forecastHourly"],
                     "timezone": props["timeZone"],
-                    "forecastZone": props.get("forecastZone")
+                    "forecastZone": props.get("forecastZone"),
+                    "cwa": props.get("cwa")
                 }
                 NWS_GRID_CACHE[iata] = result
                 return result
@@ -67,6 +68,31 @@ def fetch_weather_alerts(zone_url):
     except requests.RequestException as e:
         print(f"Error fetching weather alerts for zone {zone_url}: {e}")
         return []
+
+def fetch_aviation_forecast_discussion(cwa):
+    if not cwa:
+        return None
+    
+    cwa = cwa.lower()
+    now = datetime.utcnow()
+    cache = AVIATION_FORECAST_DISCUSSION_CACHE
+    
+    if cwa in cache and (now - cache[cwa]["time"]).total_seconds() < 600: # 10 minute cache
+        return cache[cwa]["data"]
+
+    try:
+        url = f"https://aviationweather.gov/api/data/fcstdisc?cwa={cwa}&type=afd"
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        # The response is plain text.
+        discussion_text = resp.text
+        cache[cwa] = {"data": discussion_text, "time": now}
+        return discussion_text
+    except requests.RequestException as e:
+        print(f"Error fetching aviation forecast discussion for {cwa}: {e}")
+        # Cache the error for a shorter period to avoid spamming the API
+        cache[cwa] = {"data": None, "time": now}
+        return None
 
 def get_latest_ops_plan_json():
     now = datetime.utcnow()
@@ -225,6 +251,8 @@ def fetch_and_log_weather(iata):
         daily_periods = daily.get("properties", {}).get("periods", [])
 
         alerts = fetch_weather_alerts(grid.get("forecastZone"))
+        
+        aviation_forecast = fetch_aviation_forecast_discussion(grid.get("cwa"))
 
         now = datetime.now(pytz.timezone(grid["timezone"]))
         now_utc = datetime.now(pytz.utc)
@@ -258,7 +286,8 @@ def fetch_and_log_weather(iata):
             "hourly": hourly_periods,
             "daily": daily_periods,
             "timezone": grid["timezone"],
-            "alerts": alerts
+            "alerts": alerts,
+            "aviation_forecast": aviation_forecast
         }
     except requests.RequestException as e:
         print(f"Error fetching weather for {iata}: {e}")

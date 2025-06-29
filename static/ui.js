@@ -50,6 +50,14 @@ function renderBaseCard(card) {
           ${card.detailedForecast || "Detailed forecast not available."}
         </div>
       </details>
+      ${card.aviationForecast ? `
+      <details class="aviation-forecast-details mb-2">
+        <summary class="detailed-forecast-summary">Aviation Forecast Discussion</summary>
+        <div class="aviation-forecast-content">
+          <pre>${card.aviationForecast}</pre>
+        </div>
+      </details>
+      ` : ''}
       <div class="risk-assessment ${card.riskClass} mb-2">
         <div class="risk-label">${card.riskLabel}</div>
         <div class="risk-percentages">

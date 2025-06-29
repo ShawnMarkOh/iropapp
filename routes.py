@@ -53,7 +53,8 @@ def init_routes(app):
         # Default structure for the output
         data_out = {
             "hourly": [], "daily": [], "timezone": tz.zone, "sirs": [],
-            "terminal_constraints": [], "faa_events": [], "alerts": []
+            "terminal_constraints": [], "faa_events": [], "alerts": [],
+            "aviation_forecast": None
         }
 
         # Get all historically logged hours for the requested date from HourlyWeather
@@ -76,6 +77,7 @@ def init_routes(app):
             if forecast_data:
                 data_out["daily"] = forecast_data.get("daily", [])
                 data_out["alerts"] = forecast_data.get("alerts", [])
+                data_out["aviation_forecast"] = forecast_data.get("aviation_forecast")
 
         # --- MERGE LOGIC ---
         # This logic combines past data (from HourlyWeather) with the most recent forecast
@@ -188,3 +190,4 @@ def init_routes(app):
     def api_hourly_snapshots(iata, date):
         rows = HourlySnapshot.query.filter_by(iata=iata.upper(), date=date).order_by(HourlySnapshot.hour).all()
         return jsonify([r.as_dict() for r in rows])
+# --- END OF FILE routes.py ---

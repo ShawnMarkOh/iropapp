@@ -150,6 +150,7 @@ async function loadDashboard(isUpdate = false) {
       window.LATEST_CONSTRAINTS = wx.terminal_constraints || [];
       FAA_EVENTS[hub.iata] = wx.faa_events || [];
       const alerts = wx.alerts || [];
+      const aviationForecast = wx.aviation_forecast;
 
       const daysToProcess = isArchive ? 1 : 3;
       for (let dayIdx=0; dayIdx<daysToProcess; ++dayIdx) {
@@ -289,7 +290,7 @@ async function loadDashboard(isUpdate = false) {
             }
         }
 
-        const card = { isArchive, hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: effectiveGroundStopData, groundDelay: (dayIdx > 0 ? null : groundDelayData), alerts: alerts };
+        const card = { isArchive, hub, name: hub.name, iata: hub.iata, city: hub.city, date: formatLocalDateOnly(dayDate, hub.tz), temp: displayTemp, shortForecast: (period && period.shortForecast) || "", detailedForecast: (period && period.detailedForecast) || "", wind: displayWind, percentHigh, percentPartial, riskLabel: assessment.label, riskClass: assessment.class, hourBlocks, summary: assessment.summary, groundStop: effectiveGroundStopData, groundDelay: (dayIdx > 0 ? null : groundDelayData), alerts: alerts, aviationForecast: aviationForecast };
         
         allDayBaseData[dayIdx].push(card);
         if (!localDailyBrief[dayIdx][assessment.summary]) localDailyBrief[dayIdx][assessment.summary] = [];

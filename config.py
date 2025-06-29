@@ -207,4 +207,5 @@ FAA_EVENTS_CACHE_TIME = {}
 FAA_OPS_PLAN_URL_CACHE = {"json": None, "time": None}
 GROUND_STOPS_CACHE = {"json": None, "time": None}
 GROUND_DELAYS_CACHE = {"json": None, "time": None}
+AVIATION_FORECAST_DISCUSSION_CACHE = {}
 # --- END OF FILE config.py ---
