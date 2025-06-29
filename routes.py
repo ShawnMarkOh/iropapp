@@ -5,6 +5,7 @@ import pytz
 import json
 from datetime import datetime
 import requests
+from bs4 import BeautifulSoup
 
 from flask import jsonify, render_template, send_from_directory, request, flash, redirect, url_for
 from flask_login import login_user, logout_user, login_required, current_user
@@ -155,14 +156,31 @@ def init_routes(app, bcrypt):
     def airport_info_api(icao):
         """
         Proxy for aviationweather.gov to get airport data, avoiding CORS issues.
+        This proxy now parses the response and returns clean JSON.
         """
         try:
             url = f"https://aviationweather.gov/api/data/airport?ids={icao.upper()}&format=json"
             resp = requests.get(url, timeout=15)
             resp.raise_for_status()
-            # The external API may return direct JSON or HTML with JSON in a <pre> tag.
-            # We just pass the content through and let the client handle parsing.
-            return resp.text, resp.status_code, {'Content-Type': resp.headers.get('Content-Type')}
+            
+            content_type = resp.headers.get('Content-Type', '')
+            
+            # The API sometimes returns JSON directly, and sometimes HTML with JSON in a <pre> tag.
+            if 'application/json' in content_type:
+                return jsonify(resp.json())
+            
+            # Handle HTML response
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            pre_tag = soup.find('pre')
+            if pre_tag:
+                try:
+                    json_data = json.loads(pre_tag.string)
+                    return jsonify(json_data)
+                except (json.JSONDecodeError, TypeError):
+                    return jsonify({"error": "Failed to parse JSON from aviationweather.gov response."}), 500
+            
+            return jsonify({"error": "Could not find airport data in the response from aviationweather.gov."}), 502
+
         except requests.RequestException as e:
             error_message = f"Failed to fetch data from aviationweather.gov: {e}"
             print(error_message)
