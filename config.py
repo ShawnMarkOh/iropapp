@@ -161,6 +161,43 @@ INACTIVE_HUBS = [
             {"label": "17/35", "heading": 170, "len": 7004},
             {"label": "8/26",  "heading": 80,  "len": 7000}
         ]
+    },
+    {
+        "name": "Miami International Airport",
+        "iata": "MIA",
+        "city": "Miami, FL",
+        "tz": "America/New_York",
+        "lat": 25.7959,
+        "lon": -80.2871,
+        "runways": [
+            {"label": "8L/26R", "heading": 90, "len": 8600},
+            {"label": "9/27", "heading": 90, "len": 13016},
+            {"label": "12/30", "heading": 120, "len": 9355}
+        ]
+    },
+    {
+        "name": "Phoenix Sky Harbor International Airport",
+        "iata": "PHX",
+        "city": "Phoenix, AZ",
+        "tz": "America/Phoenix",
+        "lat": 33.4342,
+        "lon": -112.0116,
+        "runways": [
+            {"label": "8/26", "heading": 80, "len": 11489},
+            {"label": "7L/25R", "heading": 80, "len": 10300},
+            {"label": "7R/25L", "heading": 80, "len": 7800}
+        ]
+    },
+    {
+        "name": "Harrisburg International Airport",
+        "iata": "MDT",
+        "city": "Middletown, PA",
+        "tz": "America/New_York",
+        "lat": 40.1935,
+        "lon": -76.7634,
+        "runways": [
+            {"label": "13/31", "heading": 130, "len": 10001}
+        ]
     }
 ]
 
