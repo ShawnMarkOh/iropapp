@@ -8,12 +8,23 @@ import requests
 
 from flask import jsonify, render_template, send_from_directory, request, flash, redirect, url_for
 from flask_login import login_user, logout_user, login_required, current_user
-from sqlalchemy import desc
+from sqlalchemy import desc, inspect
 from werkzeug.utils import secure_filename
 
 import config
 import services
 from database import db, HourlyWeather, HourlySnapshot, Hub, User
+
+EDITABLE_MODELS = {
+    'default': {
+        'hourly_weather': HourlyWeather,
+        'hourly_snapshot': HourlySnapshot,
+    },
+    'airports': {
+        'user': User,
+        'hub': Hub,
+    }
+}
 
 def init_routes(app, bcrypt):
     @app.route("/login", methods=['GET', 'POST'])
@@ -43,6 +54,11 @@ def init_routes(app, bcrypt):
     def admin_panel():
         return render_template("admin.html")
 
+    @app.route("/admin/edit-db")
+    @login_required
+    def edit_db():
+        return render_template("edit_db.html")
+
     @app.route("/")
     def dashboard():
         return render_template("index.html")
@@ -70,6 +86,7 @@ def init_routes(app, bcrypt):
         return jsonify([h.as_dict() for h in hubs])
 
     @app.route("/api/hubs/add", methods=['POST'])
+    @login_required
     def add_hub_api():
         data = request.get_json()
         if not data:
@@ -103,6 +120,7 @@ def init_routes(app, bcrypt):
             return jsonify({"error": "Failed to add hub to database."}), 500
 
     @app.route("/api/hubs/update_order", methods=['POST'])
+    @login_required
     def update_hub_order_api():
         data = request.get_json()
         if not data or 'active' not in data or 'inactive' not in data:
@@ -236,6 +254,7 @@ def init_routes(app, bcrypt):
         return jsonify(delays if delays is not None else {})
 
     @app.route('/api/import-weather-db', methods=['POST'])
+    @login_required
     def import_weather_db():
         if 'db_file' not in request.files:
             return jsonify({"error": "No file part"}), 400
@@ -301,4 +320,92 @@ def init_routes(app, bcrypt):
     def api_hourly_snapshots(iata, date):
         rows = HourlySnapshot.query.filter_by(iata=iata.upper(), date=date).order_by(HourlySnapshot.hour).all()
         return jsonify([r.as_dict() for r in rows])
+
+    # --- Admin DB Edit API ---
+    @app.route("/api/admin/db/binds")
+    @login_required
+    def get_db_binds():
+        binds = list(app.config.get('SQLALCHEMY_BINDS', {}).keys())
+        binds.append('default') # The main DB doesn't have a bind key
+        return jsonify(sorted(binds))
+
+    @app.route("/api/admin/db/tables/<bind_key>")
+    @login_required
+    def get_db_tables(bind_key):
+        if bind_key not in EDITABLE_MODELS:
+            return jsonify({"error": "Invalid database bind"}), 404
+        return jsonify(sorted(list(EDITABLE_MODELS[bind_key].keys())))
+
+    @app.route("/api/admin/db/table/<bind_key>/<table_name>")
+    @login_required
+    def get_table_data(bind_key, table_name):
+        if bind_key not in EDITABLE_MODELS or table_name not in EDITABLE_MODELS[bind_key]:
+            return jsonify({"error": "Invalid database or table"}), 404
+        
+        Model = EDITABLE_MODELS[bind_key][table_name]
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
+
+        pagination = Model.query.order_by(Model.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        
+        columns = [c.key for c in inspect(Model).columns]
+        
+        items = []
+        for item in pagination.items:
+            item_dict = {c: getattr(item, c) for c in columns}
+            items.append(item_dict)
+
+        return jsonify({
+            "columns": columns,
+            "items": items,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev,
+            "page": pagination.page,
+            "total_pages": pagination.pages,
+            "total_items": pagination.total
+        })
+
+    @app.route("/api/admin/db/table/<bind_key>/<table_name>/<int:entry_id>", methods=['POST'])
+    @login_required
+    def update_table_entry(bind_key, table_name, entry_id):
+        if bind_key not in EDITABLE_MODELS or table_name not in EDITABLE_MODELS[bind_key]:
+            return jsonify({"error": "Invalid database or table"}), 404
+        
+        Model = EDITABLE_MODELS[bind_key][table_name]
+        entry = Model.query.get_or_404(entry_id)
+        data = request.get_json()
+
+        if not data:
+            return jsonify({"error": "Invalid request body"}), 400
+
+        mapper = inspect(Model)
+        for key, value in data.items():
+            if key in mapper.columns and key != 'id':
+                column_type = mapper.columns[key].type.python_type
+                try:
+                    if value is None or value == '':
+                        converted_value = None
+                    elif column_type == bool:
+                        converted_value = str(value).lower() in ['true', '1', 't', 'y', 'yes']
+                    else:
+                        converted_value = column_type(value)
+                    setattr(entry, key, converted_value)
+                except (ValueError, TypeError):
+                    return jsonify({"error": f"Invalid value '{value}' for column '{key}' (expected {column_type.__name__})"}), 400
+        
+        db.session.commit()
+        return jsonify({"success": True})
+
+    @app.route("/api/admin/db/table/<bind_key>/<table_name>/<int:entry_id>", methods=['DELETE'])
+    @login_required
+    def delete_table_entry(bind_key, table_name, entry_id):
+        if bind_key not in EDITABLE_MODELS or table_name not in EDITABLE_MODELS[bind_key]:
+            return jsonify({"error": "Invalid database or table"}), 404
+        
+        Model = EDITABLE_MODELS[bind_key][table_name]
+        entry = Model.query.get_or_404(entry_id)
+        
+        db.session.delete(entry)
+        db.session.commit()
+        return jsonify({"success": True})
 # --- END OF FILE routes.py ---
