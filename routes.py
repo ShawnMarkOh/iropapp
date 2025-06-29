@@ -6,15 +6,43 @@ import json
 from datetime import datetime
 import requests
 
-from flask import jsonify, render_template, send_from_directory, request
+from flask import jsonify, render_template, send_from_directory, request, flash, redirect, url_for
+from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy import desc
 from werkzeug.utils import secure_filename
 
 import config
 import services
-from database import db, HourlyWeather, HourlySnapshot, Hub
+from database import db, HourlyWeather, HourlySnapshot, Hub, User
 
-def init_routes(app):
+def init_routes(app, bcrypt):
+    @app.route("/login", methods=['GET', 'POST'])
+    def login():
+        if current_user.is_authenticated:
+            return redirect(url_for('admin_panel'))
+        if request.method == 'POST':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            user = User.query.filter_by(username=username).first()
+            if user and bcrypt.check_password_hash(user.password_hash, password):
+                login_user(user)
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('admin_panel'))
+            else:
+                flash('Login Unsuccessful. Please check username and password.', 'danger')
+        return render_template('login.html')
+
+    @app.route("/logout")
+    @login_required
+    def logout():
+        logout_user()
+        return redirect(url_for('dashboard'))
+
+    @app.route("/admin")
+    @login_required
+    def admin_panel():
+        return render_template("admin.html")
+
     @app.route("/")
     def dashboard():
         return render_template("index.html")

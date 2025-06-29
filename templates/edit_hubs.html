@@ -41,6 +41,14 @@
                         <li><a class="dropdown-item" href="/calendar">Calendar View</a></li>
                         <li><a class="dropdown-item" href="/?action=edit-hubs">Edit Hubs</a></li>
                         <li><a class="dropdown-item" href="/api-docs">API Details</a></li>
+                        {% if current_user.is_authenticated %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/admin">Admin Panel</a></li>
+                            <li><a class="dropdown-item" href="/logout">Logout</a></li>
+                        {% else %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/login">Admin Login</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 <div class="theme-toggler" id="theme-toggler" title="Toggle light/dark theme">

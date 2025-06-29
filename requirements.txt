@@ -8,3 +8,5 @@ flask_sqlalchemy
 flask-socketio
 eventlet
 pathspec
+Flask-Login
+Flask-Bcrypt

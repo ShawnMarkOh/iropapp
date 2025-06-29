@@ -3,6 +3,11 @@
 import os
 from datetime import datetime
 
+# --- App Security ---
+# IMPORTANT: Change this in a production environment!
+# You can generate a secure key with: python -c 'import os; print(os.urandom(24).hex())'
+SECRET_KEY = os.environ.get('SECRET_KEY') or os.urandom(24).hex()
+
 # --- Directory and File Paths ---
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 os.makedirs(DATA_DIR, exist_ok=True)

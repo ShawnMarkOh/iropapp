@@ -32,6 +32,14 @@
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#addAirportModal">Add Airport</a></li>
                         <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#importDataModal">Import Weather Data</a></li>
                         <li><a class="dropdown-item" href="/api-docs">API Details</a></li>
+                        {% if current_user.is_authenticated %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/admin">Admin Panel</a></li>
+                            <li><a class="dropdown-item" href="/logout">Logout</a></li>
+                        {% else %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/login">Admin Login</a></li>
+                        {% endif %}
                     </ul>
                 </div>
                 <div class="theme-toggler" id="theme-toggler" title="Toggle light/dark theme">
