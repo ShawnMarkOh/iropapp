@@ -93,10 +93,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).filter(r => r.len > 0)
             };
 
-            // 4. Dispatch event to notify other parts of the app
-            document.dispatchEvent(new CustomEvent('newHubAdded', { detail: newHub }));
+            // 4. POST to backend to save the hub
+            statusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Saving ${newHub.name} to database...</div>`;
 
-            // 5. Show success and manage modals
+            const saveResp = await fetch('/api/hubs/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newHub),
+            });
+
+            if (!saveResp.ok) {
+                const errJson = await saveResp.json();
+                throw new Error(errJson.error || `Failed to save airport (status: ${saveResp.status})`);
+            }
+
+            const saveResult = await saveResp.json();
+
+            // 5. Dispatch event to notify other parts of the app (like hubs_editor)
+            document.dispatchEvent(new CustomEvent('newHubAdded', { detail: saveResult.hub }));
+
+            // 6. Show success and manage modals
             statusEl.innerHTML = `<div class="alert alert-success">Successfully added ${newHub.name} (${newHub.iata}). It is now available in the 'Inactive Hubs' list in the editor.</div>`;
             
             setTimeout(() => {

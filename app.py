@@ -1,13 +1,14 @@
 # --- START OF FILE app.py ---
 
 import os
+import json
 import threading
 from flask import Flask
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit
 
 import config
-from database import db, init_db
+from database import db, init_db, Hub
 from routes import init_routes
 from tasks import init_tasks
 
@@ -22,8 +23,50 @@ db.init_app(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Database and Routes Setup ---
+def seed_database(app_instance):
+    with app_instance.app_context():
+        # Check if hubs table is empty
+        if not Hub.query.first():
+            print("Hub table is empty. Seeding database from config.py...")
+            # Seed active hubs
+            for i, hub_data in enumerate(config.HUBS):
+                runways_str = json.dumps(hub_data.get("runways", []))
+                new_hub = Hub(
+                    iata=hub_data["iata"],
+                    name=hub_data["name"],
+                    city=hub_data["city"],
+                    tz=hub_data["tz"],
+                    lat=hub_data["lat"],
+                    lon=hub_data["lon"],
+                    runways_json=runways_str,
+                    is_active=True,
+                    display_order=i
+                )
+                db.session.add(new_hub)
+            
+            # Seed inactive hubs
+            for hub_data in config.INACTIVE_HUBS:
+                runways_str = json.dumps(hub_data.get("runways", []))
+                new_hub = Hub(
+                    iata=hub_data["iata"],
+                    name=hub_data["name"],
+                    city=hub_data["city"],
+                    tz=hub_data["tz"],
+                    lat=hub_data["lat"],
+                    lon=hub_data["lon"],
+                    runways_json=runways_str,
+                    is_active=False,
+                    display_order=999 # High number for inactive
+                )
+                db.session.add(new_hub)
+            
+            db.session.commit()
+            print("Database seeded successfully.")
+
 # Create database tables if they don't exist
 init_db(app)
+# Seed the database if needed
+seed_database(app)
 
 # Register all the routes from routes.py
 init_routes(app)

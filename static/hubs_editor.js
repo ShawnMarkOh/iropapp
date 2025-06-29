@@ -73,6 +73,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeHubElements = Array.from(activeHubsContainer.querySelectorAll('.card'));
         const activeHubsOrder = activeHubElements.map(el => el.dataset.iata);
         
+        const inactiveHubElements = Array.from(inactiveHubsContainer.querySelectorAll('.card'));
+        const inactiveHubsOrder = inactiveHubElements.map(el => el.dataset.iata);
+
+        // Persist to backend
+        fetch('/api/hubs/update_order', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ active: activeHubsOrder, inactive: inactiveHubsOrder }),
+        }).catch(err => console.error("Failed to save hub order to backend:", err));
+
         if (getCookie("cookie_consent") === "true") {
             setCookie('card_order', activeHubsOrder.join(','), 365);
         }

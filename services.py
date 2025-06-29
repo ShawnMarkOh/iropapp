@@ -12,7 +12,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
 from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE, AVIATION_FORECAST_DISCUSSION_CACHE
-from database import db, HourlyWeather, HourlySnapshot
+from database import db, HourlyWeather, HourlySnapshot, Hub
 
 NWS_GRID_CACHE = {}
 
@@ -36,24 +36,23 @@ def get_nws_grid(iata):
     if iata in NWS_GRID_CACHE:
         return NWS_GRID_CACHE[iata]
     
-    all_hubs = HUBS + INACTIVE_HUBS
-    for hub in all_hubs:
-        if hub["iata"] == iata:
-            lat, lon = hub.get("lat"), hub.get("lon")
-            if lat and lon:
-                resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", timeout=15)
-                resp.raise_for_status()
-                grid = resp.json()
-                props = grid["properties"]
-                result = {
-                    "forecast": props["forecast"],
-                    "forecastHourly": props["forecastHourly"],
-                    "timezone": props["timeZone"],
-                    "forecastZone": props.get("forecastZone"),
-                    "cwa": props.get("cwa")
-                }
-                NWS_GRID_CACHE[iata] = result
-                return result
+    hub = Hub.query.filter_by(iata=iata).first()
+    if hub:
+        lat, lon = hub.lat, hub.lon
+        if lat and lon:
+            resp = requests.get(f"https://api.weather.gov/points/{lat},{lon}", timeout=15)
+            resp.raise_for_status()
+            grid = resp.json()
+            props = grid["properties"]
+            result = {
+                "forecast": props["forecast"],
+                "forecastHourly": props["forecastHourly"],
+                "timezone": props["timeZone"],
+                "forecastZone": props.get("forecastZone"),
+                "cwa": props.get("cwa")
+            }
+            NWS_GRID_CACHE[iata] = result
+            return result
     return None
 
 def fetch_weather_alerts(zone_url):

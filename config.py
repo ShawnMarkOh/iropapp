@@ -13,6 +13,8 @@ SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(DATA_DIR, "weatherlog.db")}'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # --- Airport Hubs Data ---
+# NOTE: The lists below are now only used to seed the database on the first run.
+# All subsequent hub management is done via the database and the UI.
 HUBS = [
     {
         "name": "Charlotte Douglas International Airport",

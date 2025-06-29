@@ -7,7 +7,7 @@ from datetime import datetime
 
 import services
 import config
-from database import db, HourlySnapshot
+from database import db, HourlySnapshot, Hub
 
 def periodic_ops_plan_refresh():
     while True:
@@ -27,9 +27,9 @@ def data_refresh_job(app, socketio):
             new_ground_delays = services.fetch_faa_ground_delays()
 
             data_changed_snapshot = False
-            all_hubs = config.HUBS + config.INACTIVE_HUBS
+            all_hubs = Hub.query.all()
             for hub in all_hubs:
-                iata = hub["iata"]
+                iata = hub.iata
                 # Fetch fresh weather data
                 weather_data = services.fetch_and_log_weather(iata)
                 
@@ -37,7 +37,7 @@ def data_refresh_job(app, socketio):
                 merged_log = services.load_daily_log()
                 sirs = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
                 terminal_constraints = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
-                faa_events = services.get_events_for_hub_day(iata, now, hub["tz"])
+                faa_events = services.get_events_for_hub_day(iata, now, hub.tz)
                 
                 snapshot = {
                     "weather": weather_data,

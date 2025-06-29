@@ -5,6 +5,29 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+class Hub(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    iata = db.Column(db.String(4), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    city = db.Column(db.String(100), nullable=False)
+    tz = db.Column(db.String(50), nullable=False)
+    lat = db.Column(db.Float, nullable=False)
+    lon = db.Column(db.Float, nullable=False)
+    runways_json = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+    display_order = db.Column(db.Integer, default=0, nullable=False)
+
+    def as_dict(self):
+        return {
+            "iata": self.iata,
+            "name": self.name,
+            "city": self.city,
+            "tz": self.tz,
+            "lat": self.lat,
+            "lon": self.lon,
+            "runways": json.loads(self.runways_json)
+        }
+
 class HourlyWeather(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     iata = db.Column(db.String(4), index=True, nullable=False)

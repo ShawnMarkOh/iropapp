@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 
 import config
 import services
-from database import db, HourlyWeather, HourlySnapshot
+from database import db, HourlyWeather, HourlySnapshot, Hub
 
 def init_routes(app):
     @app.route("/")
@@ -33,11 +33,77 @@ def init_routes(app):
 
     @app.route("/api/hubs")
     def hubs_api():
-        return jsonify(config.HUBS)
+        hubs = Hub.query.filter_by(is_active=True).order_by(Hub.display_order).all()
+        return jsonify([h.as_dict() for h in hubs])
 
     @app.route("/api/hubs/inactive")
     def inactive_hubs_api():
-        return jsonify(config.INACTIVE_HUBS)
+        hubs = Hub.query.filter_by(is_active=False).order_by(Hub.name).all()
+        return jsonify([h.as_dict() for h in hubs])
+
+    @app.route("/api/hubs/add", methods=['POST'])
+    def add_hub_api():
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Invalid request"}), 400
+
+        required_fields = ["iata", "name", "city", "tz", "lat", "lon", "runways"]
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        if Hub.query.filter_by(iata=data['iata']).first():
+            return jsonify({"error": f"Hub with IATA code {data['iata']} already exists."}), 409
+
+        try:
+            new_hub = Hub(
+                iata=data['iata'],
+                name=data['name'],
+                city=data['city'],
+                tz=data['tz'],
+                lat=data['lat'],
+                lon=data['lon'],
+                runways_json=json.dumps(data['runways']),
+                is_active=False, # Add as inactive by default
+                display_order=999
+            )
+            db.session.add(new_hub)
+            db.session.commit()
+            return jsonify({"success": True, "hub": new_hub.as_dict()}), 201
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error adding hub: {e}")
+            return jsonify({"error": "Failed to add hub to database."}), 500
+
+    @app.route("/api/hubs/update_order", methods=['POST'])
+    def update_hub_order_api():
+        data = request.get_json()
+        if not data or 'active' not in data or 'inactive' not in data:
+            return jsonify({"error": "Invalid data format"}), 400
+
+        try:
+            active_iatas = data['active']
+            inactive_iatas = data['inactive']
+
+            # Update active hubs
+            for i, iata in enumerate(active_iatas):
+                hub = Hub.query.filter_by(iata=iata).first()
+                if hub:
+                    hub.is_active = True
+                    hub.display_order = i
+
+            # Update inactive hubs
+            for iata in inactive_iatas:
+                hub = Hub.query.filter_by(iata=iata).first()
+                if hub:
+                    hub.is_active = False
+                    hub.display_order = 999
+
+            db.session.commit()
+            return jsonify({"success": True})
+        except Exception as e:
+            db.session.rollback()
+            print(f"Error updating hub order: {e}")
+            return jsonify({"error": "Failed to update hub order."}), 500
 
     @app.route("/api/airport-info/<icao>")
     def airport_info_api(icao):
@@ -60,11 +126,10 @@ def init_routes(app):
     def weather_api(iata):
         iata = iata.upper()
         req_date = request.args.get('date')
-        all_hubs = config.HUBS + config.INACTIVE_HUBS
-        hub = next((h for h in all_hubs if h["iata"] == iata), None)
+        hub = Hub.query.filter_by(iata=iata).first()
         if not hub:
             return jsonify({"error": "Unknown IATA code"}), 404
-        tz = pytz.timezone(hub["tz"])
+        tz = pytz.timezone(hub.tz)
 
         local_date_str = req_date or datetime.now(tz).strftime("%Y-%m-%d")
 
