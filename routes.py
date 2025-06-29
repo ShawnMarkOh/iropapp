@@ -404,7 +404,20 @@ def init_routes(app, bcrypt):
         
         items = []
         for item in pagination.items:
-            item_dict = {c: getattr(item, c) for c in columns}
+            item_dict = {}
+            for c in columns:
+                value = getattr(item, c)
+                # Special handling for runways_json to pretty-print it for the editor
+                if table_name == 'hub' and c == 'runways_json' and isinstance(value, str):
+                    try:
+                        # Prettify the JSON to make it more readable in a textarea.
+                        # This also helps the frontend logic to choose a textarea by adding newlines.
+                        parsed_json = json.loads(value)
+                        item_dict[c] = json.dumps(parsed_json, indent=2)
+                    except (json.JSONDecodeError, TypeError):
+                        item_dict[c] = value # Fallback to original value if it's not valid JSON
+                else:
+                    item_dict[c] = value
             items.append(item_dict)
 
         return jsonify({
