@@ -10,6 +10,9 @@ LOG_FILE = os.path.join(DATA_DIR, "daily.log.json")
 
 # --- Database Configuration ---
 SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(DATA_DIR, "weatherlog.db")}'
+SQLALCHEMY_BINDS = {
+    'airports': f'sqlite:///{os.path.join(DATA_DIR, "airports.db")}'
+}
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 # --- Airport Hubs Data ---

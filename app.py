@@ -15,6 +15,7 @@ from tasks import init_tasks
 # --- App Initialization ---
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = config.SQLALCHEMY_DATABASE_URI
+app.config['SQLALCHEMY_BINDS'] = config.SQLALCHEMY_BINDS
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = config.SQLALCHEMY_TRACK_MODIFICATIONS
 
 # --- Extensions Initialization ---

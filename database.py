@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 class Hub(db.Model):
+    __bind_key__ = 'airports'
     id = db.Column(db.Integer, primary_key=True)
     iata = db.Column(db.String(4), unique=True, nullable=False, index=True)
     name = db.Column(db.String(100), nullable=False)
