@@ -37,6 +37,9 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
     let faaEvent = faaEventsIndexed[h] || [];
     let groundStopForHour = snapshots ? (groundStopIndexed[h] || null) : null;
     let groundDelayForHour = snapshots ? (groundDelayIndexed[h] || null) : null;
+
+    const isPast = (highlightHour !== null && h < highlightHour);
+
     if (period) {
       riskObj = getHourRisk((period.shortForecast || "") + " " + (period.detailedForecast || ""));
       txt = period.shortForecast || "";
@@ -72,13 +75,22 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
     if (snapshots) {
         isGroundStopHour = !!groundStopForHour;
     } else if (groundStopHours) {
-        if (h >= groundStopHours.start && h <= groundStopHours.end) {
+        // For live view, only apply ground stop to current and future hours
+        if (!isPast && h >= groundStopHours.start && h <= groundStopHours.end) {
             isGroundStopHour = true;
         }
     }
 
+    let hasGroundDelay = false;
+    if (snapshots) {
+        hasGroundDelay = !!groundDelayForHour;
+    } else if (groundDelayData && !isPast) {
+        // For live view, only apply ground delay to current and future hours
+        hasGroundDelay = true;
+    }
+
     // If there's a ground stop, delay program, or FAA event, upgrade risk to high
-    if ((isGroundStopHour || (snapshots ? groundDelayForHour : groundDelayData) || faaEvent.length > 0) && riskObj.risk !== 'nodata') {
+    if ((isGroundStopHour || hasGroundDelay || faaEvent.length > 0) && riskObj.risk !== 'nodata') {
         riskObj = { risk: "high", key: "FAA Event", hourClass: "hour-severe" };
     }
 
@@ -91,7 +103,7 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       risk: riskObj.risk,
       hourClass: riskObj.hourClass + (highlightHour === h ? " hour-current" : ""),
       isCurrent: (highlightHour === h),
-      isPast: (highlightHour !== null && h < highlightHour),
+      isPast: isPast,
       baseLabel: baseLabel || "",
       ymd: ymdStr,
       shortF: shortF,
@@ -104,7 +116,7 @@ function analyzeDayHours(hourlyPeriods, dateYMD, tz, highlightHour, baseLabel, y
       temp: temp,
       isGroundStop: isGroundStopHour,
       groundStop: groundStopForHour,
-      groundDelay: groundDelayForHour
+      groundDelay: hasGroundDelay ? (snapshots ? groundDelayForHour : groundDelayData) : null
     });
   }
   let countHigh = 0, countPartial = 0, total = 0;
