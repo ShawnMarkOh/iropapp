@@ -22,6 +22,25 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchData('/api/hubs', 'hubs-preview');
     });
 
+    document.getElementById('fetch-airport-info')?.addEventListener('click', async () => {
+        const previewEl = document.querySelector('#airport-info-preview pre code');
+        if (!previewEl) return;
+
+        previewEl.textContent = 'Loading...';
+        try {
+            const response = await fetch('/api/airport-info/KPIA');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.text();
+            // Just display the raw text, which is HTML
+            previewEl.textContent = data;
+        } catch (error) {
+            console.error('Error fetching API ', error);
+            previewEl.textContent = `Error loading: ${error.message}`;
+        }
+    });
+
     document.getElementById('fetch-weather')?.addEventListener('click', () => {
         fetchData('/api/weather/CLT', 'weather-preview');
     });

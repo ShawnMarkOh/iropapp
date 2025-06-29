@@ -17,10 +17,15 @@ document.addEventListener('DOMContentLoaded', () => {
         statusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Fetching data for ${icao}...</div>`;
 
         try {
-            // 1. Fetch from aviationweather.gov
-            const airportResp = await fetch(`https://aviationweather.gov/api/data/airport?ids=${icao}&format=json`);
+            // 1. Fetch from our own backend proxy
+            const airportResp = await fetch(`/api/airport-info/${icao}`);
             if (!airportResp.ok) {
-                throw new Error(`Could not fetch airport data from aviationweather.gov (status: ${airportResp.status})`);
+                let errorMsg = `Could not fetch airport data (status: ${airportResp.status})`;
+                try {
+                    const errJson = await airportResp.json();
+                    if (errJson.error) errorMsg = errJson.error;
+                } catch (e) { /* ignore if response is not json */ }
+                throw new Error(errorMsg);
             }
             const airportRespText = await airportResp.text();
             const preMatch = airportRespText.match(/<pre[^>]*>([\s\S]*?)<\/pre>/);

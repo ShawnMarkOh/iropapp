@@ -4,6 +4,7 @@ import os
 import pytz
 import json
 from datetime import datetime
+import requests
 
 from flask import jsonify, render_template, send_from_directory, request
 from sqlalchemy import desc
@@ -37,6 +38,23 @@ def init_routes(app):
     @app.route("/api/hubs/inactive")
     def inactive_hubs_api():
         return jsonify(config.INACTIVE_HUBS)
+
+    @app.route("/api/airport-info/<icao>")
+    def airport_info_api(icao):
+        """
+        Proxy for aviationweather.gov to get airport data, avoiding CORS issues.
+        """
+        try:
+            url = f"https://aviationweather.gov/api/data/airport?ids={icao.upper()}&format=json"
+            resp = requests.get(url, timeout=15)
+            resp.raise_for_status()
+            # The external API returns HTML with JSON in a <pre> tag.
+            # We just pass the text content through.
+            return resp.text, resp.status_code, {'Content-Type': resp.headers.get('Content-Type')}
+        except requests.RequestException as e:
+            error_message = f"Failed to fetch data from aviationweather.gov: {e}"
+            print(error_message)
+            return jsonify({"error": error_message}), 502 # Bad Gateway
 
     @app.route("/api/weather/<iata>")
     def weather_api(iata):
