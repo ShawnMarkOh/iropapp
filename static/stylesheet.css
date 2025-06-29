@@ -138,6 +138,8 @@ body {
     border-radius: var(--border-radius);
     background-color: var(--bs-tertiary-bg);
     padding: 1rem;
+    max-height: 60vh;
+    overflow-y: auto;
 }
 .hubs-list .card {
     cursor: grab;
