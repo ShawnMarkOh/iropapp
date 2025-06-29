@@ -4,3 +4,7 @@ __pycache__/
 .env
 gemini_api_key.txt
 /__pycache__
+__pycache__/config.cpython-311.pyc
+__pycache__/routes.cpython-311.pyc
+__pycache__/services.cpython-311.pyc
+__pycache__/tasks.cpython-311.pyc
