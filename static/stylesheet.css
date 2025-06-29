@@ -292,25 +292,6 @@ body {
     border-left: 2px solid var(--bs-border-color);
 }
 
-.aviation-forecast-content {
-    font-size: 0.85rem;
-    color: var(--dim-text);
-    margin-top: 8px;
-    padding: 8px;
-    border-left: 2px solid var(--bs-border-color);
-    background-color: rgba(var(--bs-tertiary-bg-rgb), 0.5);
-    max-height: 200px;
-    overflow-y: auto;
-    border-radius: 4px;
-}
-
-.aviation-forecast-content pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    margin: 0;
-    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-}
-
 .risk-assessment {
     padding: 0.75rem;
     border-radius: calc(var(--border-radius) * 0.75);
@@ -403,6 +384,14 @@ body {
 .modal-header { border-bottom: 1px solid var(--bs-border-color); }
 .modal-body { background-color: var(--bs-body-bg); }
 .modal-section-title { font-weight: 600; color: var(--primary-color); margin-bottom: 1rem; }
+
+#aviationForecastModalBody pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 0.9rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    margin: 0;
+}
 
 .modal-table th, .modal-table td {
     padding: 8px 12px;

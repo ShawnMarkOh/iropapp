@@ -51,12 +51,11 @@ function renderBaseCard(card) {
         </div>
       </details>
       ${card.aviationForecast ? `
-      <details class="aviation-forecast-details mb-2">
-        <summary class="detailed-forecast-summary">Aviation Forecast Discussion</summary>
-        <div class="aviation-forecast-content">
-          <pre>${card.aviationForecast}</pre>
-        </div>
-      </details>
+      <div class="d-grid mb-2">
+        <button class="btn btn-sm btn-outline-secondary" type="button" onclick='showAviationForecastModal(${JSON.stringify(card.aviationForecast)}, ${JSON.stringify(card.iata)})'>
+          Aviation Forecast Discussion
+        </button>
+      </div>
       ` : ''}
       <div class="risk-assessment ${card.riskClass} mb-2">
         <div class="risk-label">${card.riskLabel}</div>
@@ -365,5 +364,16 @@ function showHourModal(block, base) {
       </div>
   `;
   let modal = new bootstrap.Modal(document.getElementById('hourModal'));
+  modal.show();
+}
+
+function showAviationForecastModal(forecastText, hubIata) {
+  const modal = new bootstrap.Modal(document.getElementById('aviationForecastModal'));
+  const modalLabel = document.getElementById('aviationForecastModalLabel');
+  const modalBody = document.getElementById('aviationForecastModalBody');
+
+  modalLabel.textContent = `Aviation Forecast Discussion for ${hubIata}`;
+  modalBody.innerHTML = `<pre>${forecastText}</pre>`;
+  
   modal.show();
 }
