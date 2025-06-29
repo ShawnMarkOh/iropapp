@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const inactiveHubsContainer = document.getElementById('inactive-hubs-container');
     const socket = typeof io !== 'undefined' ? io() : null;
     let allHubsMap; // Will be populated in init()
+    const isMobile = window.matchMedia('(max-width: 767.98px)').matches;
 
     // If the editor elements aren't on the page, don't initialize.
     if (!activeHubsContainer || !inactiveHubsContainer) {
@@ -36,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newHub = e.detail;
         if (newHub && inactiveHubsContainer) {
             // Check if it's already in the DOM to prevent duplicates
-            if (document.querySelector(`.card[data-iata="${newHub.iata}"]`)) {
+            if (document.querySelector(`.hub-card[data-iata="${newHub.iata}"]`)) {
                 return;
             }
             if (allHubsMap) {
@@ -48,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (inactivePlaceholder) {
                 inactivePlaceholder.remove();
             }
-            inactiveHubsContainer.insertAdjacentHTML('beforeend', renderHub(newHub));
+            inactiveHubsContainer.insertAdjacentHTML('beforeend', renderHub(newHub, false));
         }
     });
 
@@ -58,15 +59,87 @@ document.addEventListener('DOMContentLoaded', () => {
         'preset3': ['CLT', 'MDT', 'PHL']
     };
 
-    function renderHub(hub) {
+    function renderHub(hub, isActive) {
+        let buttons = '';
+        if (isMobile) {
+            if (isActive) {
+                buttons = `
+                    <div class="hub-actions">
+                        <button class="btn btn-sm btn-outline-secondary hub-action-btn" data-action="move-up" aria-label="Move Up">▲</button>
+                        <button class="btn btn-sm btn-outline-secondary hub-action-btn" data-action="move-down" aria-label="Move Down">▼</button>
+                        <button class="btn btn-sm btn-outline-warning hub-action-btn" data-action="deactivate" aria-label="Deactivate">✖</button>
+                    </div>
+                `;
+            } else {
+                buttons = `
+                    <div class="hub-actions">
+                        <button class="btn btn-sm btn-outline-success hub-action-btn" data-action="activate" aria-label="Activate">✔</button>
+                    </div>
+                `;
+            }
+        }
+
         return `
-            <div class="card mb-3" data-iata="${hub.iata}">
-                <div class="card-body p-3">
-                    <h5 class="card-title mb-1">${hub.name} (${hub.iata})</h5>
-                    <p class="card-text text-muted small">${hub.city}</p>
+            <div class="card mb-3 hub-card" data-iata="${hub.iata}">
+                <div class="card-body">
+                    <div>
+                        <h5 class="card-title">${hub.name} (${hub.iata})</h5>
+                        <p class="card-text text-muted small">${hub.city}</p>
+                    </div>
+                    ${buttons}
                 </div>
             </div>
         `;
+    }
+
+    function updateMobileButtonStates() {
+        if (!isMobile) return;
+
+        const activeCards = activeHubsContainer.querySelectorAll('.hub-card');
+        activeCards.forEach((card, index) => {
+            const upButton = card.querySelector('[data-action="move-up"]');
+            const downButton = card.querySelector('[data-action="move-down"]');
+            if (upButton) upButton.disabled = (index === 0);
+            if (downButton) downButton.disabled = (index === activeCards.length - 1);
+        });
+    }
+
+    function handleHubAction(e) {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const card = button.closest('.hub-card');
+        if (!card) return;
+
+        const action = button.dataset.action;
+        const iata = card.dataset.iata;
+        const hubData = allHubsMap.get(iata);
+
+        switch (action) {
+            case 'activate':
+                card.remove();
+                activeHubsContainer.insertAdjacentHTML('beforeend', renderHub(hubData, true));
+                break;
+            case 'deactivate':
+                card.remove();
+                inactiveHubsContainer.insertAdjacentHTML('afterbegin', renderHub(hubData, false));
+                break;
+            case 'move-up':
+                const prev = card.previousElementSibling;
+                if (prev) {
+                    card.parentElement.insertBefore(card, prev);
+                }
+                break;
+            case 'move-down':
+                const next = card.nextElementSibling;
+                if (next) {
+                    card.parentElement.insertBefore(next, card);
+                }
+                break;
+        }
+        
+        saveHubOrder();
+        updateMobileButtonStates();
     }
 
     function saveHubOrder() {
@@ -99,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!activePlaceholder) {
                 const p = document.createElement('p');
                 p.className = 'text-muted';
-                p.textContent = 'Drag hubs here to activate them.';
+                p.textContent = 'Drag or use buttons to activate hubs.';
                 activeHubsContainer.appendChild(p);
             }
         } else {
@@ -131,17 +204,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
         const activeHubs = presetOrder.map(iata => allHubsMap.get(iata)).filter(Boolean);
         const activeIataSet = new Set(presetOrder);
-        const inactiveHubs = [...allHubsMap.values()].filter(hub => !activeIataSet.has(hub.iata));
+        const inactiveHubs = [...allHubsMap.values()].filter(hub => !activeIataSet.has(hub.iata)).sort((a, b) => a.name.localeCompare(b.name));
     
-        activeHubsContainer.innerHTML = activeHubs.map(renderHub).join('');
-        inactiveHubsContainer.innerHTML = inactiveHubs.map(renderHub).join('');
+        activeHubsContainer.innerHTML = activeHubs.map(hub => renderHub(hub, true)).join('');
+        inactiveHubsContainer.innerHTML = inactiveHubs.map(hub => renderHub(hub, false)).join('');
         
         saveHubOrder();
+        updateMobileButtonStates();
     }
 
     function loadHubs(defaultActiveHubs, defaultInactiveHubs) {
         const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
         allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
+        window.allHubsMap = allHubsMap; // Expose for airport_adder
 
         let activeHubs = [];
         let inactiveHubs = [];
@@ -151,21 +226,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const savedOrder = savedOrderCookie.split(',');
             activeHubs = savedOrder.map(iata => allHubsMap.get(iata)).filter(Boolean);
             const activeIataSet = new Set(savedOrder);
-            inactiveHubs = allHubs.filter(hub => !activeIataSet.has(hub.iata));
+            inactiveHubs = allHubs.filter(hub => !activeIataSet.has(hub.iata)).sort((a, b) => a.name.localeCompare(b.name));
         } else {
             activeHubs = defaultActiveHubs;
             inactiveHubs = defaultInactiveHubs;
         }
 
-        activeHubsContainer.innerHTML = activeHubs.map(renderHub).join('');
-        inactiveHubsContainer.innerHTML = inactiveHubs.map(renderHub).join('');
+        activeHubsContainer.innerHTML = activeHubs.map(hub => renderHub(hub, true)).join('');
+        inactiveHubsContainer.innerHTML = inactiveHubs.map(hub => renderHub(hub, false)).join('');
 
         if (activeHubs.length === 0) {
-            activeHubsContainer.innerHTML = '<p class="text-muted">Drag hubs here to activate them.</p>';
+            activeHubsContainer.innerHTML = '<p class="text-muted">Drag or use buttons to activate hubs.</p>';
         }
         if (inactiveHubs.length === 0) {
             inactiveHubsContainer.innerHTML = '<p class="text-muted">All hubs are active.</p>';
         }
+        updateMobileButtonStates();
     }
 
     async function init() {
@@ -191,10 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         loadHubs(defaultActiveHubs, defaultInactiveHubs);
 
-        // This is the allHubsMap for this module instance.
-        const allHubs = [...defaultActiveHubs, ...defaultInactiveHubs];
-        allHubsMap = new Map(allHubs.map(h => [h.iata, h]));
-
         document.querySelectorAll('.hub-presets-dropdown').forEach(dropdown => {
             dropdown.addEventListener('click', (event) => {
                 if (event.target.matches('.dropdown-item')) {
@@ -205,19 +277,27 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        new Sortable(activeHubsContainer, {
-            group: 'shared-hubs',
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onEnd: saveHubOrder
-        });
+        if (isMobile) {
+            // On mobile, use buttons
+            [activeHubsContainer, inactiveHubsContainer].forEach(container => {
+                container.addEventListener('click', handleHubAction);
+            });
+        } else {
+            // On desktop, use SortableJS
+            new Sortable(activeHubsContainer, {
+                group: 'shared-hubs',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: saveHubOrder
+            });
 
-        new Sortable(inactiveHubsContainer, {
-            group: 'shared-hubs',
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onEnd: saveHubOrder
-        });
+            new Sortable(inactiveHubsContainer, {
+                group: 'shared-hubs',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: saveHubOrder
+            });
+        }
     }
 
     init();

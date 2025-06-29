@@ -145,6 +145,33 @@ body {
 .hubs-list .card:active {
     cursor: grabbing;
 }
+.hubs-list .card-body {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+}
+.hubs-list .card-body .card-title {
+    font-size: 1rem;
+    margin-bottom: 0.1rem;
+}
+.hubs-list .card-body .card-text {
+    margin-bottom: 0;
+}
+.hub-actions {
+    display: flex;
+    gap: 6px;
+}
+.hub-action-btn {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 0.9rem;
+    line-height: 1;
+}
 .card-body {
     display: flex;
     flex-direction: column;
@@ -503,5 +530,8 @@ body {
         min-height: 100px;
         max-height: 25vh;
         overflow-y: auto;
+    }
+    .hubs-list .card {
+        cursor: default;
     }
 }
