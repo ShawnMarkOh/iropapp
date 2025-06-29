@@ -76,8 +76,13 @@ def fetch_aviation_forecast_discussion(cwa):
     now = datetime.utcnow()
     cache = AVIATION_FORECAST_DISCUSSION_CACHE
     
-    if cwa in cache and (now - cache[cwa]["time"]).total_seconds() < 600: # 10 minute cache
-        return cache[cwa]["data"]
+    if cwa in cache:
+        cached_time = cache[cwa]["time"]
+        cached_data = cache[cwa]["data"]
+        # If we have data, cache for 10 mins (600s). If it was an error (None), cache for 1 min (60s).
+        cache_duration = 600 if cached_data is not None else 60
+        if (now - cached_time).total_seconds() < cache_duration:
+            return cached_data
 
     try:
         url = f"https://aviationweather.gov/api/data/fcstdisc?cwa={cwa}&type=afd"
@@ -89,7 +94,7 @@ def fetch_aviation_forecast_discussion(cwa):
         return discussion_text
     except requests.RequestException as e:
         print(f"Error fetching aviation forecast discussion for {cwa}: {e}")
-        # Cache the error for a shorter period to avoid spamming the API
+        # Cache the error to avoid spamming the API
         cache[cwa] = {"data": None, "time": now}
         return None
 
@@ -380,6 +385,57 @@ def fetch_faa_ground_delays():
         print(f"Error in fetch_faa_ground_delays: {e}")
         pass
     return output
+
+def snapshot_hub_data(hub, ground_stops, ground_delays):
+    """
+    Creates and saves a data snapshot for a single hub.
+    This function assumes it's called within a Flask app context.
+    Returns True if data was changed/added, False otherwise.
+    """
+    now = datetime.now()
+    iata = hub.iata
+    # Fetch fresh weather data
+    weather_data = fetch_and_log_weather(iata)
+    
+    # Load other data for snapshot
+    merged_log = load_daily_log()
+    sirs = merged_log.get("hubs", {}).get(iata, {}).get("sirs", [])
+    terminal_constraints = merged_log.get("hubs", {}).get(iata, {}).get("terminal_constraints", [])
+    faa_events = get_events_for_hub_day(iata, now, hub.tz)
+    
+    snapshot = {
+        "weather": weather_data,
+        "sirs": sirs,
+        "terminal_constraints": terminal_constraints,
+        "faa_events": faa_events,
+        "ground_stop": ground_stops.get(iata),
+        "ground_delay": ground_delays.get(iata)
+    }
+    
+    cur_date = now.strftime('%Y-%m-%d')
+    cur_hour = now.hour
+    exists = HourlySnapshot.query.filter_by(iata=iata, date=cur_date, hour=cur_hour).first()
+    snapshot_str = json.dumps(snapshot)
+
+    data_changed = False
+    if not exists:
+        db.session.add(HourlySnapshot(
+            iata=iata,
+            date=cur_date,
+            hour=cur_hour,
+            snapshot_json=snapshot_str
+        ))
+        data_changed = True
+    else:
+        # Compare new snapshot with old one to see if an update is needed
+        if exists.snapshot_json != snapshot_str:
+            exists.snapshot_json = snapshot_str
+            data_changed = True
+    
+    if data_changed:
+        db.session.commit()
+
+    return data_changed
 
 def import_from_db_file(filepath):
     source_engine = create_engine(f'sqlite:///{filepath}')

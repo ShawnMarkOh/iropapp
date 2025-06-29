@@ -114,6 +114,19 @@ def init_routes(app, bcrypt):
             )
             db.session.add(new_hub)
             db.session.commit()
+
+            # Immediately fetch data for the new hub to create its first snapshot
+            try:
+                print(f"Performing initial data snapshot for new hub: {new_hub.iata}")
+                ground_stops = services.fetch_faa_ground_stops()
+                ground_delays = services.fetch_faa_ground_delays()
+                services.snapshot_hub_data(new_hub, ground_stops, ground_delays)
+                print(f"Initial snapshot for {new_hub.iata} complete.")
+            except Exception as e:
+                # Log this error but don't fail the whole request,
+                # the background task will pick it up eventually.
+                print(f"ERROR: Could not perform initial data snapshot for {new_hub.iata}: {e}")
+
             return jsonify({"success": True, "hub": new_hub.as_dict()}), 201
         except Exception as e:
             db.session.rollback()

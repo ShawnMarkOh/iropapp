@@ -510,12 +510,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Listen for a new hub being added by airport_adder.js
-  document.addEventListener('newHubAdded', (e) => {
+  document.addEventListener('newHubAdded', async (e) => {
     const newHub = e.detail;
     if (newHub && !allHubsMap.has(newHub.iata)) {
         allHubsMap.set(newHub.iata, newHub);
         defaultInactiveHubs.push(newHub);
         console.log(`New hub ${newHub.iata} added to the application map.`);
+        // Reload dashboard data to include the new hub
+        await loadDashboard(true);
     }
   });
 });
