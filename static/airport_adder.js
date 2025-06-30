@@ -37,31 +37,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('No valid data found for that ICAO code.');
             }
 
+            if (!airportData.tz) {
+                throw new Error('Timezone information was not available from the airport data source.');
+            }
+
             // Check if IATA already exists
             if (window.allHubsMap && window.allHubsMap.has(airportData.iataId)) {
                 throw new Error(`Airport ${airportData.iataId} (${airportData.name}) already exists in the hub list.`);
             }
 
-            statusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Fetching timezone for ${airportData.iataId}...</div>`;
-
-            // 2. Fetch timezone
-            const tzResp = await fetch(`https://timeapi.io/api/TimeZone/coordinate?latitude=${airportData.lat}&longitude=${airportData.lon}`);
-            if (!tzResp.ok) {
-                throw new Error('Could not fetch timezone data.');
-            }
-            const tzData = await tzResp.json();
-            const timezone = tzData.timeZone;
-
-            if (!timezone) {
-                throw new Error('Could not determine timezone for the airport.');
-            }
-
-            // 3. Format into hub object
+            // 2. Format into hub object
             const newHub = {
                 name: (airportData.name.split('/')[1] || airportData.name).trim().replace(/\s\s+/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                 iata: airportData.iataId,
                 city: `${(airportData.name.split('/')[0] || '').trim().replace(/\b\w/g, l => l.toUpperCase())}, ${airportData.state}`,
-                tz: timezone,
+                tz: airportData.tz,
                 lat: parseFloat(airportData.lat),
                 lon: parseFloat(airportData.lon),
                 runways: (airportData.runways || []).map(r => {
@@ -76,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).filter(r => r.len > 0)
             };
 
-            // 4. POST to backend to save the hub
+            // 3. POST to backend to save the hub
             statusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Saving ${newHub.name} to database...</div>`;
 
             const saveResp = await fetch('/api/hubs/add', {
@@ -94,10 +84,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const saveResult = await saveResp.json();
 
-            // 5. Dispatch event to notify other parts of the app (like hubs_editor)
+            // 4. Dispatch event to notify other parts of the app (like hubs_editor)
             document.dispatchEvent(new CustomEvent('newHubAdded', { detail: saveResult.hub }));
 
-            // 6. Show success and manage modals
+            // 5. Show success and manage modals
             statusEl.innerHTML = `<div class="alert alert-success">Successfully added ${newHub.name} (${newHub.iata}). It is now available in the 'Inactive Hubs' list in the editor.</div>`;
             
             setTimeout(() => {
