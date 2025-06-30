@@ -1,12 +1,6 @@
 // Placeholders for globals and functions not defined in the original script
 window.FAA_EVENT_DEFINITIONS = window.FAA_EVENT_DEFINITIONS || {};
-window.FAA_LITERAL_TRANSLATIONS = window.FAA_LITERAL_TRANSLATIONS || {};
-
-function translateFAAString(s) {
-    if (!s) return "N/A";
-    // In a real scenario, this would look up definitions. For now, it just returns the string.
-    return s;
-}
+// window.FAA_LITERAL_TRANSLATIONS and translateFAAString are loaded from faa_translate.js
 
 const windDirs = {N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5, S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5};
 function windDirToDeg(dir) {dir = (dir||"").toUpperCase();if (windDirs[dir] !== undefined) return windDirs[dir];if (/^\d+$/.test(dir)) return Number(dir);return null;}

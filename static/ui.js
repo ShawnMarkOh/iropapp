@@ -382,7 +382,8 @@ async function showAviationForecastModal(hubIata) {
     }
     const data = await response.json();
     const forecastText = data.forecast || 'No forecast discussion available.';
-    modalBody.innerHTML = `<pre>${forecastText}</pre>`;
+    const highlightedText = highlightFAAAbbreviations(forecastText);
+    modalBody.innerHTML = `<pre>${highlightedText}</pre>`;
   } catch (error) {
     console.error('Error fetching aviation forecast discussion:', error);
     modalBody.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;

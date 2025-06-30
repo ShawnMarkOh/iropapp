@@ -240,3 +240,23 @@ function translateFAAString(str) {
   }
   return result.replace(/\s+/g, ' ').trim();
 }
+
+function highlightFAAAbbreviations(str) {
+  if (!str) return '';
+  
+  // Escape HTML special characters from the input string to prevent XSS
+  const tempDiv = document.createElement('div');
+  tempDiv.textContent = str;
+  let result = tempDiv.innerHTML;
+
+  const entries = Object.entries(window.FAA_LITERAL_TRANSLATIONS)
+    .sort((a, b) => b[0].length - a[0].length);
+  
+  for (const [abbr, translation] of entries) {
+    const escapedAbbr = abbr.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const re = new RegExp(`\\b(${escapedAbbr})\\b`, 'gi');
+    
+    result = result.replace(re, (match) => `<span class="faa-term" title="${translation}">${match}</span>`);
+  }
+  return result;
+}

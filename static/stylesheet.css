@@ -395,6 +395,12 @@ body {
     margin: 0;
 }
 
+.faa-term {
+    text-decoration: underline dotted;
+    cursor: help;
+    text-decoration-color: var(--primary-color);
+}
+
 .modal-table th, .modal-table td {
     padding: 8px 12px;
     text-align: left;
