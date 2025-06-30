@@ -55,11 +55,13 @@ function renderBaseCard(card) {
           Aviation Forecast Discussion
         </button>
       </div>
-      <div class="risk-assessment ${card.riskClass} mb-2">
-        <div class="risk-label">${card.riskLabel}</div>
-        <div class="risk-percentages">
-          <span>TS/Severe: <b>${card.percentHigh}%</b></span>
-          <span>Other Hazards: <b>${card.percentPartial}%</b></span>
+      <div class="d-grid mb-2">
+        <div class="risk-assessment ${card.riskClass}">
+          <div class="risk-label">${card.riskLabel}</div>
+          <div class="risk-percentages">
+            <span>TS/Severe: <b>${card.percentHigh}%</b></span>
+            <span>Other Hazards: <b>${card.percentPartial}%</b></span>
+          </div>
         </div>
       </div>
     </div>
