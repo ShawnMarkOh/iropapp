@@ -9,8 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const importSubmitBtn = importForm ? importForm.querySelector('button[type="submit"]') : null;
 
     let importPollingInterval = null;
+    let currentXhr = null; // To hold the upload request
 
     function resetImportModal() {
+        if (currentXhr) {
+            currentXhr.abort();
+            currentXhr = null;
+        }
+        if (importPollingInterval) {
+            clearInterval(importPollingInterval);
+            importPollingInterval = null;
+        }
+
         importStatusEl.style.display = 'none';
         importStatusEl.innerHTML = '';
         if (importProgressContainer) {
@@ -20,7 +30,8 @@ document.addEventListener('DOMContentLoaded', () => {
             importProgressBar.style.width = '0%';
             importProgressBar.textContent = '0%';
             importProgressBar.classList.remove('bg-success', 'bg-danger');
-            importProgressBar.classList.add('progress-bar-animated');
+            importProgressBar.classList.add('progress-bar-animated', 'progress-bar-striped');
+            importProgressBar.setAttribute('aria-valuenow', 0);
         }
         if (importForm) {
             importForm.reset();
@@ -31,13 +42,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dbFileInput) {
             dbFileInput.disabled = false;
         }
-        if (importPollingInterval) {
-            clearInterval(importPollingInterval);
-            importPollingInterval = null;
-        }
     }
 
     async function pollImportStatus(taskId) {
+        // Set up UI for processing phase
+        importStatusEl.innerHTML = `<div class="alert alert-info">File uploaded. Now processing data on server...</div>`;
+        importProgressBar.style.width = '0%';
+        importProgressBar.textContent = '0%';
+        importProgressBar.setAttribute('aria-valuenow', 0);
+
         importPollingInterval = setInterval(async () => {
             try {
                 const response = await fetch(`/api/import-status/${taskId}`);
@@ -50,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const data = await response.json();
 
-                // Update progress bar
+                // Update progress bar for processing
                 if (importProgressBar) {
                     const progress = Math.round(data.progress || 0);
                     importProgressBar.style.width = `${progress}%`;
@@ -68,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearInterval(importPollingInterval);
                     if (importProgressBar) {
                         importProgressBar.classList.add('bg-success');
-                        importProgressBar.classList.remove('progress-bar-animated');
+                        importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
                     }
                     const stats = data.stats;
                     if (importStatusEl) {
@@ -87,12 +100,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     clearInterval(importPollingInterval);
                     if (importProgressBar) {
                         importProgressBar.classList.add('bg-danger');
-                        importProgressBar.classList.remove('progress-bar-animated');
+                        importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
                     }
                     if (importStatusEl) {
                         importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error}</div>`;
                     }
-                    // Don't reset immediately, let user see the error
                     setTimeout(resetImportModal, 8000);
                 }
             } catch (error) {
@@ -102,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (importProgressBar) {
                     importProgressBar.classList.add('bg-danger');
-                    importProgressBar.classList.remove('progress-bar-animated');
+                    importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
                 }
                 setTimeout(resetImportModal, 8000);
             }
@@ -110,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (importForm) {
-        importForm.addEventListener('submit', async (e) => {
+        importForm.addEventListener('submit', (e) => {
             e.preventDefault();
             if (!dbFileInput.files || dbFileInput.files.length === 0) {
                 importStatusEl.innerHTML = `<div class="alert alert-warning">Please select a file first.</div>`;
@@ -122,32 +134,78 @@ document.addEventListener('DOMContentLoaded', () => {
             const formData = new FormData();
             formData.append('db_file', file);
 
-            // Disable form and show progress
+            // Reset UI for new upload
+            resetImportModal();
             importSubmitBtn.disabled = true;
             dbFileInput.disabled = true;
             importProgressContainer.style.display = 'block';
-            importStatusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Uploading file... This may take a while for large files.</div>`;
             importStatusEl.style.display = 'block';
+            importStatusEl.innerHTML = `<div class="alert alert-info">Starting upload...</div>`;
 
-            try {
-                const response = await fetch('/api/import-weather-db', {
-                    method: 'POST',
-                    body: formData,
-                });
+            currentXhr = new XMLHttpRequest();
+            currentXhr.open('POST', '/api/import-weather-db', true);
 
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || 'An unknown error occurred during upload.');
+            // Upload progress
+            currentXhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    importProgressBar.style.width = percentComplete + '%';
+                    importProgressBar.textContent = percentComplete + '%';
+                    importProgressBar.setAttribute('aria-valuenow', percentComplete);
+                    importStatusEl.innerHTML = `<div class="alert alert-info">Uploading file...</div>`;
                 }
+            });
 
-                // Start polling for status
-                pollImportStatus(result.task_id);
+            // Upload finished
+            currentXhr.addEventListener('load', () => {
+                const xhr = currentXhr;
+                currentXhr = null;
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        if (result.task_id) {
+                            pollImportStatus(result.task_id);
+                        } else {
+                            throw new Error('Server did not return a task ID.');
+                        }
+                    } catch (parseError) {
+                        importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> Failed to parse server response.</div>`;
+                        setTimeout(resetImportModal, 5000);
+                    }
+                } else {
+                    let errorMsg = `Upload failed with status: ${xhr.status} ${xhr.statusText}`;
+                    try {
+                        const errJson = JSON.parse(xhr.responseText);
+                        if (errJson.error) errorMsg = errJson.error;
+                    } catch (e) { /* ignore if response is not json */ }
+                    
+                    if (xhr.status === 413) {
+                        errorMsg = 'File is too large. The server rejected the upload. Please check the web server configuration (e.g., Nginx client_max_body_size).';
+                    }
 
-            } catch (error) {
-                importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Upload Error:</strong> ${error.message}</div>`;
+                    importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Upload Error:</strong> ${errorMsg}</div>`;
+                    importProgressBar.classList.add('bg-danger');
+                    importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                    setTimeout(resetImportModal, 8000);
+                }
+            });
+
+            // Upload error
+            currentXhr.addEventListener('error', () => {
+                currentXhr = null;
+                importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Network Error:</strong> The upload could not be completed.</div>`;
+                importProgressBar.classList.add('bg-danger');
+                importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
                 setTimeout(resetImportModal, 5000);
-            }
+            });
+
+            // Upload aborted
+            currentXhr.addEventListener('abort', () => {
+                currentXhr = null;
+                console.log('Upload aborted.');
+            });
+
+            currentXhr.send(formData);
         });
     }
 
