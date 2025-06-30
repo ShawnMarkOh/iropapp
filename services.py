@@ -5,6 +5,7 @@ import re
 import json
 import requests
 import pytz
+import logging
 from datetime import datetime, timedelta
 from xml.etree import ElementTree
 from bs4 import BeautifulSoup
@@ -65,7 +66,7 @@ def fetch_weather_alerts(zone_url):
         resp.raise_for_status()
         return resp.json().get("features", [])
     except requests.RequestException as e:
-        print(f"Error fetching weather alerts for zone {zone_url}: {e}")
+        logging.error(f"Error fetching weather alerts for zone {zone_url}: {e}")
         return []
 
 def fetch_aviation_forecast_discussion(cwa):
@@ -88,7 +89,7 @@ def fetch_aviation_forecast_discussion(cwa):
         discussion_text = resp.text
 
         if not discussion_text.strip():
-             print(f"Received empty forecast discussion for {cwa}.")
+             logging.warning(f"Received empty forecast discussion for {cwa}.")
              return cached_discussion.discussion_text if cached_discussion else None
 
         if cached_discussion:
@@ -103,9 +104,9 @@ def fetch_aviation_forecast_discussion(cwa):
         db.session.commit()
         return discussion_text
     except requests.RequestException as e:
-        print(f"Error fetching aviation forecast discussion for {cwa}: {e}")
+        logging.error(f"Error fetching aviation forecast discussion for {cwa}: {e}")
         if cached_discussion:
-            print(f"Returning stale discussion for {cwa} due to fetch error.")
+            logging.warning(f"Returning stale discussion for {cwa} due to fetch error.")
             return cached_discussion.discussion_text
         return None
 
@@ -316,7 +317,7 @@ def fetch_and_log_weather(iata):
             "aviation_forecast": aviation_forecast
         }
     except requests.RequestException as e:
-        print(f"Error fetching weather for {iata}: {e}")
+        logging.error(f"Error fetching weather for {iata}: {e}")
         return None
 
 def fetch_faa_ground_stops():
@@ -360,7 +361,7 @@ def fetch_faa_ground_stops():
             return output
 
     except Exception as e:
-        print(f"Error in fetch_faa_ground_stops: {e}")
+        logging.error(f"Error in fetch_faa_ground_stops: {e}")
         pass
     return output
 
@@ -404,7 +405,7 @@ def fetch_faa_ground_delays():
             return output
 
     except Exception as e:
-        print(f"Error in fetch_faa_ground_delays: {e}")
+        logging.error(f"Error in fetch_faa_ground_delays: {e}")
         pass
     return output
 
@@ -540,12 +541,12 @@ def process_imported_db(app, task_id, filepath):
             tasks_dict[task_id]['message'] = 'Import finished successfully.'
 
     except Exception as e:
-        print(f"Error during background import (task {task_id}): {e}")
+        logging.error(f"Error during background import (task {task_id}): {e}")
         db.session.rollback()
         tasks_dict[task_id]['status'] = 'error'
         tasks_dict[task_id]['error'] = str(e)
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
-            print(f"Removed temporary import file: {filepath}")
+            logging.info(f"Removed temporary import file: {filepath}")
 # --- END OF FILE services.py ---

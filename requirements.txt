@@ -10,3 +10,4 @@ eventlet
 pathspec
 Flask-Login
 Flask-Bcrypt
+watchdog

@@ -5,6 +5,7 @@ import pytz
 import json
 import uuid
 import threading
+import logging
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -64,6 +65,11 @@ def init_routes(app, bcrypt):
     @login_required
     def edit_db():
         return render_template("edit_db.html")
+
+    @app.route("/admin/logs")
+    @login_required
+    def admin_logs():
+        return render_template("admin_logs.html")
 
     @app.route("/")
     def dashboard():
@@ -126,20 +132,20 @@ def init_routes(app, bcrypt):
 
             # Immediately fetch data for the new hub to create its first snapshot
             try:
-                print(f"Performing initial data snapshot for new hub: {new_hub.iata}")
+                logging.info(f"Performing initial data snapshot for new hub: {new_hub.iata}")
                 ground_stops = services.fetch_faa_ground_stops()
                 ground_delays = services.fetch_faa_ground_delays()
                 services.snapshot_hub_data(new_hub, ground_stops, ground_delays)
-                print(f"Initial snapshot for {new_hub.iata} complete.")
+                logging.info(f"Initial snapshot for {new_hub.iata} complete.")
             except Exception as e:
                 # Log this error but don't fail the whole request,
                 # the background task will pick it up eventually.
-                print(f"ERROR: Could not perform initial data snapshot for {new_hub.iata}: {e}")
+                logging.error(f"ERROR: Could not perform initial data snapshot for {new_hub.iata}: {e}")
 
             return jsonify({"success": True, "hub": new_hub.as_dict()}), 201
         except Exception as e:
             db.session.rollback()
-            print(f"Error adding hub: {e}")
+            logging.error(f"Error adding hub: {e}")
             return jsonify({"error": "Failed to add hub to database."}), 500
 
     @app.route("/api/hubs/update_order", methods=['POST'])
@@ -171,7 +177,7 @@ def init_routes(app, bcrypt):
             return jsonify({"success": True})
         except Exception as e:
             db.session.rollback()
-            print(f"Error updating hub order: {e}")
+            logging.error(f"Error updating hub order: {e}")
             return jsonify({"error": "Failed to update hub order."}), 500
 
     @app.route("/api/airport-info/<icao>")
@@ -205,7 +211,7 @@ def init_routes(app, bcrypt):
 
         except requests.RequestException as e:
             error_message = f"Failed to fetch data from aviationweather.gov: {e}"
-            print(error_message)
+            logging.error(error_message)
             return jsonify({"error": error_message}), 502 # Bad Gateway
 
     @app.route("/api/weather/<iata>")
@@ -301,7 +307,7 @@ def init_routes(app, bcrypt):
 
             return jsonify({"forecast": discussion})
         except Exception as e:
-            print(f"Error in aviation_forecast_discussion_api for {iata}: {e}")
+            logging.error(f"Error in aviation_forecast_discussion_api for {iata}: {e}")
             return jsonify({"error": "An unexpected error occurred."}), 500
 
     @app.route("/api/groundstops")
@@ -331,7 +337,7 @@ def init_routes(app, bcrypt):
             with open(temp_path, "ab") as f:
                 f.write(chunk.read())
         except IOError as e:
-            print(f"Error writing chunk for {safe_upload_id}: {e}")
+            logging.error(f"Error writing chunk for {safe_upload_id}: {e}")
             return jsonify({"error": "Server error while writing file chunk."}), 500
 
         return jsonify({"success": True})
@@ -359,7 +365,7 @@ def init_routes(app, bcrypt):
         try:
             os.rename(part_path, final_path)
         except OSError as e:
-            print(f"Error renaming assembled file for {safe_upload_id}: {e}")
+            logging.error(f"Error renaming assembled file for {safe_upload_id}: {e}")
             return jsonify({"error": "Server error while finalizing file."}), 500
 
         task_id = str(uuid.uuid4())
@@ -406,12 +412,12 @@ def init_routes(app, bcrypt):
                     size = size_bytes
                     unit = "B"
         except Exception as e:
-            print(f"Could not get DB size: {e}")
+            logging.error(f"Could not get DB size: {e}")
         
         try:
             days = db.session.query(HourlyWeather.date).distinct().count()
         except Exception as e:
-            print(f"Could not get DB days count: {e}")
+            logging.error(f"Could not get DB days count: {e}")
 
         return jsonify({"size": size, "unit": unit, "days": days})
 
@@ -525,4 +531,9 @@ def init_routes(app, bcrypt):
         db.session.delete(entry)
         db.session.commit()
         return jsonify({"success": True})
+
+    @app.route("/api/admin/task-status")
+    @login_required
+    def get_task_status():
+        return jsonify(app.TASK_STATUS)
 # --- END OF FILE routes.py ---

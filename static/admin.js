@@ -204,4 +204,60 @@ document.addEventListener('DOMContentLoaded', () => {
             resetImportModal();
         });
     }
+
+    // --- System Status Polling ---
+    const systemStatusContainer = document.getElementById('system-status-container');
+
+    async function fetchTaskStatus() {
+        if (!systemStatusContainer) return;
+        try {
+            const response = await fetch('/api/admin/task-status');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const tasks = await response.json();
+            renderTaskStatus(tasks);
+        } catch (error) {
+            console.error('Error fetching task status:', error);
+            systemStatusContainer.innerHTML = `<div class="alert alert-danger">Could not load system status.</div>`;
+        }
+    }
+
+    function renderTaskStatus(tasks) {
+        if (!systemStatusContainer) return;
+        if (Object.keys(tasks).length === 0) {
+            systemStatusContainer.innerHTML = '<p>No tasks are currently reporting status.</p>';
+            return;
+        }
+
+        let html = '<dl class="row">';
+        for (const [taskName, task] of Object.entries(tasks)) {
+            const statusClass = task.status === 'running' ? 'text-success' : 'text-danger';
+            const lastSuccess = task.last_success ? new Date(task.last_success).toLocaleString() : 'Never';
+            
+            html += `
+                <dt class="col-sm-4">${taskName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</dt>
+                <dd class="col-sm-8">
+                    <p class="mb-1"><strong>Status:</strong> <span class="${statusClass}">${task.status}</span></p>
+                    <p class="mb-1"><strong>Last Success:</strong> ${lastSuccess}</p>
+                    <p class="mb-1"><strong>Last Runtime:</strong> ${task.last_runtime || 'N/A'}</p>
+            `;
+
+            if (task.last_error) {
+                html += `
+                    <p class="mb-1"><strong>Last Error:</strong></p>
+                    <pre class="bg-dark text-white p-2 rounded" style="font-size: 0.8em; max-height: 100px; overflow-y: auto;"><code>${task.last_error}</code></pre>
+                `;
+            }
+            html += `</dd>`;
+        }
+        html += '</dl>';
+        systemStatusContainer.innerHTML = html;
+    }
+
+    // Initial fetch and then poll every 5 seconds
+    if (systemStatusContainer) {
+        fetchTaskStatus();
+        setInterval(fetchTaskStatus, 5000);
+    }
 });
