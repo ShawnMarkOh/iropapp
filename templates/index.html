@@ -160,15 +160,26 @@
         </div>
     </div>
 
-    <!-- Cookie Consent Banner -->
-    <div id="cookie-consent-banner" class="cookie-consent-banner" style="display: none;">
-        <div class="container d-flex justify-content-between align-items-center flex-wrap">
-            <p class="mb-2 mb-md-0 me-3">
-                This site uses cookies to save your base card layout preferences. By clicking "Accept", you agree to the use of these cookies. Declining will prevent custom layouts from being saved.
-            </p>
-            <div>
-                <button id="cookie-accept" class="btn btn-primary btn-sm me-2">Accept</button>
-                <button id="cookie-decline" class="btn btn-secondary btn-sm">Decline</button>
+    <!-- Welcome Modal -->
+    <div class="modal fade" id="welcomeModal" tabindex="-1" aria-labelledby="welcomeModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="welcomeModalLabel">Welcome to the IROPS Dashboard!</h5>
+                </div>
+                <div class="modal-body">
+                    <p>This dashboard is designed to help you monitor weather-related irregular operations (IROPS) at a glance.</p>
+                    <p>To get started, you can customize the hubs displayed on your dashboard by going to <strong>Menu &gt; Edit Hubs</strong>.</p>
+                    <p>For a more detailed explanation of all features, please check out the <a href="/how-to">How-To Guide</a>.</p>
+                    <hr>
+                    <div class="cookie-consent-section">
+                        <p class="small text-muted mb-0">This site uses a single cookie to remember your hub layout preferences. By clicking "Accept", you agree to its use. Declining will prevent custom layouts from being saved between visits.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="welcome-decline">Decline Cookie</button>
+                    <button type="button" class="btn btn-primary" id="welcome-accept">Accept & Close</button>
+                </div>
             </div>
         </div>
     </div>

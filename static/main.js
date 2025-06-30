@@ -512,24 +512,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   allHubsMap = new Map([...defaultActiveHubs, ...defaultInactiveHubs].map(h => [h.iata, h]));
   window.allHubsMap = allHubsMap; // Expose globally for airport_adder
 
-  // Cookie consent check
+  // Welcome modal & Cookie consent check
   const consent = getCookie("cookie_consent");
   if (consent === null) {
-      const banner = document.getElementById('cookie-consent-banner');
-      if(banner) banner.style.display = 'block';
+      const welcomeModalEl = document.getElementById('welcomeModal');
+      if (welcomeModalEl) {
+          const welcomeModal = new bootstrap.Modal(welcomeModalEl);
+          welcomeModal.show();
 
-      document.getElementById('cookie-accept')?.addEventListener('click', () => {
-          setCookie("cookie_consent", "true", 365);
-          if(banner) banner.style.display = 'none';
-          // Save default order on accept
-          const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
-          setCookie("card_order", defaultOrder, 365);
-      });
+          document.getElementById('welcome-accept')?.addEventListener('click', () => {
+              setCookie("cookie_consent", "true", 365);
+              // Save default order on accept
+              const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
+              setCookie("card_order", defaultOrder, 365);
+              welcomeModal.hide();
+          });
 
-      document.getElementById('cookie-decline')?.addEventListener('click', () => {
-          setCookie("cookie_consent", "false", 365);
-          if(banner) banner.style.display = 'none';
-      });
+          document.getElementById('welcome-decline')?.addEventListener('click', () => {
+              setCookie("cookie_consent", "false", 365);
+              welcomeModal.hide();
+          });
+      }
   }
 
   await initializeHubs();
