@@ -20,6 +20,84 @@ function getCookie(name) {
     return null;
 }
 
+const titleFlasher = {
+    intervalId: null,
+    originalTitle: document.title,
+    originalFavicon: null,
+    warningFavicon: null,
+    isFlashing: false,
+    currentMessage: '',
+
+    _getFavicon() {
+        const favicon = document.querySelector("link[rel*='icon']");
+        if (favicon) {
+            this.originalFavicon = favicon.href;
+        }
+    },
+
+    _createWarningFavicon() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 32;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw a red circle for warning
+        ctx.beginPath();
+        ctx.arc(16, 16, 14, 0, 2 * Math.PI, false);
+        ctx.fillStyle = '#dc3545'; // Bootstrap danger red
+        ctx.fill();
+        
+        this.warningFavicon = canvas.toDataURL('image/png');
+    },
+
+    _setFavicon(href) {
+        let link = document.querySelector("link[rel*='icon']");
+        if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+        }
+        link.href = href;
+    },
+
+    start(message) {
+        if (this.isFlashing && this.currentMessage === message) {
+            return; // Already flashing with the same message
+        }
+        
+        this.stop(); // Stop any previous flashing
+
+        if (!this.originalFavicon) this._getFavicon();
+        if (!this.warningFavicon) this._createWarningFavicon();
+
+        this.isFlashing = true;
+        this.currentMessage = message;
+        let flashing = true;
+
+        this.intervalId = setInterval(() => {
+            document.title = flashing ? this.currentMessage : this.originalTitle;
+            if (this.originalFavicon && this.warningFavicon) {
+                this._setFavicon(flashing ? this.warningFavicon : this.originalFavicon);
+            }
+            flashing = !flashing;
+        }, 1000);
+    },
+
+    stop() {
+        if (!this.isFlashing) {
+            return;
+        }
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+        document.title = this.originalTitle;
+        if (this.originalFavicon) {
+            this._setFavicon(this.originalFavicon);
+        }
+        this.isFlashing = false;
+        this.currentMessage = '';
+    }
+};
+
 // Global variables
 let HUBS = [];
 let allHubsMap;
@@ -412,6 +490,15 @@ async function updateAdvisories() {
         delayBanner.style.display = "block";
     } else {
         delayBanner.style.display = "none";
+    }
+
+    // Tab flashing logic
+    if (stopped.length > 0) {
+        titleFlasher.start(`🛑 GROUND STOP: ${stopped.join(', ')}`);
+    } else if (delayed.length > 0) {
+        titleFlasher.start(`⚠️ DELAY: ${delayed.join(', ')}`);
+    } else {
+        titleFlasher.stop();
     }
 }
 
