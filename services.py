@@ -459,49 +459,93 @@ def snapshot_hub_data(hub, ground_stops, ground_delays):
 
     return data_changed
 
-def import_from_db_file(filepath):
-    source_engine = create_engine(f'sqlite:///{filepath}')
-    
-    inspector = inspect(source_engine)
-    
-    imported_counts = {"hourly_weather": 0, "hourly_snapshot": 0}
-    
-    # Import HourlyWeather
-    if inspector.has_table('hourly_weather'):
-        with source_engine.connect() as connection:
-            result = connection.execute(text("SELECT iata, start_time, data_json, date FROM hourly_weather"))
-            source_weather = result.fetchall()
-            for row in source_weather:
-                exists = HourlyWeather.query.filter_by(iata=row[0], start_time=row[1]).first()
-                if not exists:
-                    new_weather = HourlyWeather(
-                        iata=row[0],
-                        start_time=row[1],
-                        data_json=row[2],
-                        date=row[3]
-                    )
-                    db.session.add(new_weather)
-                    imported_counts["hourly_weather"] += 1
+def process_imported_db(app, task_id, filepath):
+    """
+    Wrapper function to run the DB import in a background thread with app context.
+    Deletes the file upon completion or failure.
+    """
+    tasks_dict = app.IMPORT_TASKS
+    try:
+        with app.app_context():
+            tasks_dict[task_id]['status'] = 'processing'
+            tasks_dict[task_id]['message'] = 'Starting import...'
+            
+            source_engine = create_engine(f'sqlite:///{filepath}')
+            inspector = inspect(source_engine)
+            
+            total_rows_to_import = 0
+            
+            # Count rows for progress calculation
+            with source_engine.connect() as connection:
+                if inspector.has_table('hourly_weather'):
+                    count = connection.execute(text("SELECT COUNT(*) FROM hourly_weather")).scalar_one_or_none()
+                    total_rows_to_import += count if count is not None else 0
+                if inspector.has_table('hourly_snapshot'):
+                    count = connection.execute(text("SELECT COUNT(*) FROM hourly_snapshot")).scalar_one_or_none()
+                    total_rows_to_import += count if count is not None else 0
 
-    # Import HourlySnapshot
-    if inspector.has_table('hourly_snapshot'):
-        with source_engine.connect() as connection:
-            result = connection.execute(text("SELECT iata, date, hour, snapshot_json FROM hourly_snapshot"))
-            source_snapshots = result.fetchall()
-            for row in source_snapshots:
-                exists = HourlySnapshot.query.filter_by(iata=row[0], date=row[1], hour=row[2]).first()
-                if not exists:
-                    new_snapshot = HourlySnapshot(
-                        iata=row[0],
-                        date=row[1],
-                        hour=row[2],
-                        snapshot_json=row[3]
-                    )
-                    db.session.add(new_snapshot)
-                    imported_counts["hourly_snapshot"] += 1
-    
-    if imported_counts["hourly_weather"] > 0 or imported_counts["hourly_snapshot"] > 0:
-        db.session.commit()
-        
-    return imported_counts
+            tasks_dict[task_id]['total_rows'] = total_rows_to_import
+            
+            if total_rows_to_import == 0:
+                tasks_dict[task_id]['status'] = 'complete'
+                tasks_dict[task_id]['stats'] = {"hourly_weather": 0, "hourly_snapshot": 0}
+                tasks_dict[task_id]['message'] = 'No new data to import from file.'
+                return
+
+            processed_rows = 0
+            imported_counts = {"hourly_weather": 0, "hourly_snapshot": 0}
+
+            # Import HourlyWeather
+            if inspector.has_table('hourly_weather'):
+                with source_engine.connect() as connection:
+                    result = connection.execute(text("SELECT iata, start_time, data_json, date FROM hourly_weather"))
+                    while True:
+                        chunk = result.fetchmany(1000)
+                        if not chunk:
+                            break
+                        for row in chunk:
+                            exists = db.session.query(HourlyWeather.id).filter_by(iata=row[0], start_time=row[1]).first()
+                            if not exists:
+                                new_weather = HourlyWeather(iata=row[0], start_time=row[1], data_json=row[2], date=row[3])
+                                db.session.add(new_weather)
+                                imported_counts["hourly_weather"] += 1
+                        
+                        processed_rows += len(chunk)
+                        tasks_dict[task_id]['progress'] = (processed_rows / total_rows_to_import) * 100
+                        tasks_dict[task_id]['message'] = f'Processing weather data... ({processed_rows}/{total_rows_to_import})'
+                        db.session.commit()
+
+            # Import HourlySnapshot
+            if inspector.has_table('hourly_snapshot'):
+                with source_engine.connect() as connection:
+                    result = connection.execute(text("SELECT iata, date, hour, snapshot_json FROM hourly_snapshot"))
+                    while True:
+                        chunk = result.fetchmany(1000)
+                        if not chunk:
+                            break
+                        for row in chunk:
+                            exists = db.session.query(HourlySnapshot.id).filter_by(iata=row[0], date=row[1], hour=row[2]).first()
+                            if not exists:
+                                new_snapshot = HourlySnapshot(iata=row[0], date=row[1], hour=row[2], snapshot_json=row[3])
+                                db.session.add(new_snapshot)
+                                imported_counts["hourly_snapshot"] += 1
+                        
+                        processed_rows += len(chunk)
+                        tasks_dict[task_id]['progress'] = (processed_rows / total_rows_to_import) * 100
+                        tasks_dict[task_id]['message'] = f'Processing snapshots... ({processed_rows}/{total_rows_to_import})'
+                        db.session.commit()
+
+            tasks_dict[task_id]['status'] = 'complete'
+            tasks_dict[task_id]['stats'] = imported_counts
+            tasks_dict[task_id]['message'] = 'Import finished successfully.'
+
+    except Exception as e:
+        print(f"Error during background import (task {task_id}): {e}")
+        db.session.rollback()
+        tasks_dict[task_id]['status'] = 'error'
+        tasks_dict[task_id]['error'] = str(e)
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            print(f"Removed temporary import file: {filepath}")
 # --- END OF FILE services.py ---

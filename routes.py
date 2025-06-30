@@ -3,6 +3,8 @@
 import os
 import pytz
 import json
+import uuid
+import threading
 from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
@@ -322,18 +324,30 @@ def init_routes(app, bcrypt):
             return jsonify({"error": "No selected file"}), 400
         if file:
             filename = secure_filename(file.filename)
-            temp_path = os.path.join(config.DATA_DIR, f"temp_{filename}")
+            # Use a unique name for the temp file to avoid collisions
+            temp_filename = f"temp_{uuid.uuid4().hex}_{filename}"
+            temp_path = os.path.join(config.DATA_DIR, temp_filename)
             file.save(temp_path)
             
-            try:
-                stats = services.import_from_db_file(temp_path)
-                os.remove(temp_path)
-                return jsonify({"success": True, "stats": stats})
-            except Exception as e:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-                return jsonify({"error": f"An error occurred during import: {str(e)}"}), 500
+            task_id = str(uuid.uuid4())
+            app.IMPORT_TASKS[task_id] = {"status": "queued", "progress": 0}
+            
+            # Start background processing
+            thread = threading.Thread(target=services.process_imported_db, args=(app, task_id, temp_path))
+            thread.daemon = True
+            thread.start()
+            
+            return jsonify({"success": True, "task_id": task_id})
+            
         return jsonify({"error": "File upload failed"}), 500
+
+    @app.route('/api/import-status/<task_id>')
+    @login_required
+    def import_status(task_id):
+        task = app.IMPORT_TASKS.get(task_id)
+        if not task:
+            return jsonify({"status": "error", "error": "Task not found"}), 404
+        return jsonify(task)
 
     @app.route('/static/<path:filename>')
     def custom_static(filename):
