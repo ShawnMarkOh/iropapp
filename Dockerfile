@@ -8,7 +8,8 @@ ENV PYTHONUNBUFFERED 1
 # Set work directory.
 WORKDIR /app
 
-# Install dependencies.
+# Install git for versioning, then install Python dependencies.
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 

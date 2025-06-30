@@ -15,6 +15,7 @@ from werkzeug.utils import secure_filename
 import config
 import services
 from database import db, HourlyWeather, HourlySnapshot, Hub, User, AviationForecastDiscussion
+from utils import get_version_string
 
 EDITABLE_MODELS = {
     'default': {
@@ -54,7 +55,8 @@ def init_routes(app, bcrypt):
     @app.route("/admin")
     @login_required
     def admin_panel():
-        return render_template("admin.html")
+        app_version = get_version_string()
+        return render_template("admin.html", app_version=app_version)
 
     @app.route("/admin/edit-db")
     @login_required
