@@ -313,74 +313,36 @@ def init_routes(app, bcrypt):
         delays = config.GROUND_DELAYS_CACHE.get("json")
         return jsonify(delays if delays is not None else {})
 
-    @app.route('/api/import-weather-db-chunk', methods=['POST'])
+    @app.route('/api/import-weather-db', methods=['POST'])
     @login_required
-    def import_weather_db_chunk():
-        upload_id = request.form.get('upload_id')
-        chunk_index = request.form.get('chunk_index')
-        file_chunk = request.files.get('chunk')
+    def import_weather_db():
+        if 'db_file' not in request.files:
+            return jsonify({"error": "No file part in the request"}), 400
+        
+        file = request.files['db_file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
 
-        if not all([upload_id, chunk_index, file_chunk]):
-            return jsonify({"error": "Missing chunk data"}), 400
-
-        # Create a directory for this upload if it doesn't exist
-        upload_dir = os.path.join(config.DATA_DIR, 'uploads', secure_filename(upload_id))
-        os.makedirs(upload_dir, exist_ok=True)
-
-        # Save the chunk
-        chunk_filename = f"part_{chunk_index}"
-        chunk_path = os.path.join(upload_dir, chunk_filename)
-        try:
-            file_chunk.save(chunk_path)
-        except Exception as e:
-            return jsonify({"error": f"Failed to save chunk: {e}"}), 500
-
-        return jsonify({"success": True, "chunk_index": chunk_index})
-
-    @app.route('/api/import-weather-db-complete', methods=['POST'])
-    @login_required
-    def import_weather_db_complete():
-        data = request.get_json()
-        upload_id = data.get('upload_id')
-        filename = data.get('filename')
-        total_chunks = data.get('total_chunks')
-
-        if not all([upload_id, filename, total_chunks is not None]):
-            return jsonify({"error": "Missing completion data"}), 400
-
-        upload_dir = os.path.join(config.DATA_DIR, 'uploads', secure_filename(upload_id))
-        if not os.path.isdir(upload_dir):
-            return jsonify({"error": "Upload not found or expired."}), 404
-
-        # Reassemble the file
-        final_filename = secure_filename(filename)
-        final_filepath = os.path.join(config.DATA_DIR, f"temp_{final_filename}")
-
-        try:
-            # Verify all chunks are present before reassembly
-            for i in range(total_chunks):
-                if not os.path.exists(os.path.join(upload_dir, f"part_{i}")):
-                    raise FileNotFoundError(f"Missing chunk {i}. Please try again.")
-
-            with open(final_filepath, 'wb') as final_file:
-                for i in range(total_chunks):
-                    chunk_path = os.path.join(upload_dir, f"part_{i}")
-                    with open(chunk_path, 'rb') as chunk_file:
-                        shutil.copyfileobj(chunk_file, final_file)
+        if file:
+            filename = secure_filename(file.filename)
+            # Save to a temporary location
+            temp_dir = os.path.join(config.DATA_DIR, 'uploads')
+            os.makedirs(temp_dir, exist_ok=True)
+            temp_filepath = os.path.join(temp_dir, filename)
             
-            # Now import the reassembled file
-            stats = services.import_from_db_file(final_filepath)
-            
-            return jsonify({"success": True, "stats": stats})
-
-        except Exception as e:
-            return jsonify({"error": f"An error occurred during import: {str(e)}"}), 500
-        finally:
-            # Clean up
-            if os.path.exists(final_filepath):
-                os.remove(final_filepath)
-            if os.path.exists(upload_dir):
-                shutil.rmtree(upload_dir)
+            try:
+                file.save(temp_filepath)
+                
+                # Now import the file
+                stats = services.import_from_db_file(temp_filepath)
+                
+                return jsonify({"success": True, "stats": stats})
+            except Exception as e:
+                return jsonify({"error": f"An error occurred during import: {str(e)}"}), 500
+            finally:
+                # Clean up the uploaded file
+                if os.path.exists(temp_filepath):
+                    os.remove(temp_filepath)
 
     @app.route('/static/<path:filename>')
     def custom_static(filename):
