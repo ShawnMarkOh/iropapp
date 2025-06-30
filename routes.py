@@ -314,32 +314,63 @@ def init_routes(app, bcrypt):
         delays = config.GROUND_DELAYS_CACHE.get("json")
         return jsonify(delays if delays is not None else {})
 
-    @app.route('/api/import-weather-db', methods=['POST'])
+    @app.route('/api/upload-chunk', methods=['POST'])
     @login_required
-    def import_weather_db():
-        if 'db_file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-        file = request.files['db_file']
-        if file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
-        if file:
-            filename = secure_filename(file.filename)
-            # Use a unique name for the temp file to avoid collisions
-            temp_filename = f"temp_{uuid.uuid4().hex}_{filename}"
-            temp_path = os.path.join(config.DATA_DIR, temp_filename)
-            file.save(temp_path)
-            
-            task_id = str(uuid.uuid4())
-            app.IMPORT_TASKS[task_id] = {"status": "queued", "progress": 0}
-            
-            # Start background processing
-            thread = threading.Thread(target=services.process_imported_db, args=(app, task_id, temp_path))
-            thread.daemon = True
-            thread.start()
-            
-            return jsonify({"success": True, "task_id": task_id})
-            
-        return jsonify({"error": "File upload failed"}), 500
+    def upload_chunk():
+        upload_id = request.form.get('upload_id')
+        chunk = request.files.get('file')
+
+        if not all([upload_id, chunk]):
+            return jsonify({"error": "Missing upload_id or file chunk"}), 400
+
+        # Sanitize the upload_id to prevent path traversal
+        safe_upload_id = secure_filename(upload_id)
+        temp_path = os.path.join(config.DATA_DIR, f"upload_{safe_upload_id}.part")
+
+        try:
+            with open(temp_path, "ab") as f:
+                f.write(chunk.read())
+        except IOError as e:
+            print(f"Error writing chunk for {safe_upload_id}: {e}")
+            return jsonify({"error": "Server error while writing file chunk."}), 500
+
+        return jsonify({"success": True})
+
+    @app.route('/api/assemble-file', methods=['POST'])
+    @login_required
+    def assemble_file():
+        data = request.get_json()
+        upload_id = data.get('upload_id')
+        filename = data.get('filename')
+
+        if not all([upload_id, filename]):
+            return jsonify({"error": "Missing upload_id or filename"}), 400
+
+        safe_upload_id = secure_filename(upload_id)
+        part_path = os.path.join(config.DATA_DIR, f"upload_{safe_upload_id}.part")
+
+        if not os.path.exists(part_path):
+            return jsonify({"error": "Uploaded file not found. It may have expired or failed."}), 404
+
+        # Create a new unique name for the final assembled file
+        final_filename = f"temp_{uuid.uuid4().hex}_{secure_filename(filename)}"
+        final_path = os.path.join(config.DATA_DIR, final_filename)
+
+        try:
+            os.rename(part_path, final_path)
+        except OSError as e:
+            print(f"Error renaming assembled file for {safe_upload_id}: {e}")
+            return jsonify({"error": "Server error while finalizing file."}), 500
+
+        task_id = str(uuid.uuid4())
+        app.IMPORT_TASKS[task_id] = {"status": "queued", "progress": 0}
+        
+        # Start background processing with the assembled file
+        thread = threading.Thread(target=services.process_imported_db, args=(app, task_id, final_path))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({"success": True, "task_id": task_id})
 
     @app.route('/api/import-status/<task_id>')
     @login_required

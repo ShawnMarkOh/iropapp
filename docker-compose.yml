@@ -1,10 +1,19 @@
 version: "3.8"
 services:
+  nginx:
+    image: nginx:latest
+    container_name: iropapp_nginx
+    ports:
+      - "8550:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    depends_on:
+      - iropapp
+    restart: unless-stopped
+
   iropapp:
     build: .
     container_name: iropapp
-    ports:
-      - "8550:8550"
     restart: unless-stopped
     volumes:
       - .:/app

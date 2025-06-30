@@ -9,13 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const importSubmitBtn = importForm ? importForm.querySelector('button[type="submit"]') : null;
 
     let importPollingInterval = null;
-    let currentXhr = null; // To hold the upload request
 
     function resetImportModal() {
-        if (currentXhr) {
-            currentXhr.abort();
-            currentXhr = null;
-        }
         if (importPollingInterval) {
             clearInterval(importPollingInterval);
             importPollingInterval = null;
@@ -47,9 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function pollImportStatus(taskId) {
         // Set up UI for processing phase
         importStatusEl.innerHTML = `<div class="alert alert-info">File uploaded. Now processing data on server...</div>`;
-        importProgressBar.style.width = '0%';
-        importProgressBar.textContent = '0%';
-        importProgressBar.setAttribute('aria-valuenow', 0);
+        importProgressBar.style.width = '100%'; // Progress bar is for upload, now we are processing
+        importProgressBar.textContent = 'Processing...';
+        importProgressBar.setAttribute('aria-valuenow', 100);
 
         importPollingInterval = setInterval(async () => {
             try {
@@ -122,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (importForm) {
-        importForm.addEventListener('submit', (e) => {
+        importForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (!dbFileInput.files || dbFileInput.files.length === 0) {
                 importStatusEl.innerHTML = `<div class="alert alert-warning">Please select a file first.</div>`;
@@ -131,8 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const file = dbFileInput.files[0];
-            const formData = new FormData();
-            formData.append('db_file', file);
+            const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+            const uploadId = crypto.randomUUID();
 
             // Reset UI for new upload
             resetImportModal();
@@ -142,70 +138,64 @@ document.addEventListener('DOMContentLoaded', () => {
             importStatusEl.style.display = 'block';
             importStatusEl.innerHTML = `<div class="alert alert-info">Starting upload...</div>`;
 
-            currentXhr = new XMLHttpRequest();
-            currentXhr.open('POST', '/api/import-weather-db', true);
+            try {
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const chunk = file.slice(start, end);
 
-            // Upload progress
-            currentXhr.upload.addEventListener('progress', (event) => {
-                if (event.lengthComputable) {
-                    const percentComplete = Math.round((event.loaded / event.total) * 100);
+                    const formData = new FormData();
+                    formData.append('file', chunk, file.name);
+                    formData.append('upload_id', uploadId);
+                    
+                    const percentComplete = Math.round(((i + 1) / totalChunks) * 100);
+                    importStatusEl.innerHTML = `<div class="alert alert-info">Uploading chunk ${i + 1} of ${totalChunks}...</div>`;
+
+                    const response = await fetch('/api/upload-chunk', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ error: 'Unknown upload error.' }));
+                        throw new Error(`Chunk upload failed: ${errorData.error}`);
+                    }
+                    
                     importProgressBar.style.width = percentComplete + '%';
                     importProgressBar.textContent = percentComplete + '%';
                     importProgressBar.setAttribute('aria-valuenow', percentComplete);
-                    importStatusEl.innerHTML = `<div class="alert alert-info">Uploading file...</div>`;
                 }
-            });
 
-            // Upload finished
-            currentXhr.addEventListener('load', () => {
-                const xhr = currentXhr;
-                currentXhr = null;
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    try {
-                        const result = JSON.parse(xhr.responseText);
-                        if (result.task_id) {
-                            pollImportStatus(result.task_id);
-                        } else {
-                            throw new Error('Server did not return a task ID.');
-                        }
-                    } catch (parseError) {
-                        importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> Failed to parse server response.</div>`;
-                        setTimeout(resetImportModal, 5000);
-                    }
+                // All chunks uploaded, now assemble the file on the server
+                importStatusEl.innerHTML = `<div class="alert alert-info">File upload complete. Assembling file on server...</div>`;
+
+                const assembleResponse = await fetch('/api/assemble-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        upload_id: uploadId,
+                        filename: file.name,
+                    }),
+                });
+
+                if (!assembleResponse.ok) {
+                    const errorData = await assembleResponse.json().catch(() => ({ error: 'Unknown assembly error.' }));
+                    throw new Error(`File assembly failed: ${errorData.error}`);
+                }
+
+                const result = await assembleResponse.json();
+                if (result.task_id) {
+                    pollImportStatus(result.task_id);
                 } else {
-                    let errorMsg = `Upload failed with status: ${xhr.status} ${xhr.statusText}`;
-                    try {
-                        const errJson = JSON.parse(xhr.responseText);
-                        if (errJson.error) errorMsg = errJson.error;
-                    } catch (e) { /* ignore if response is not json */ }
-                    
-                    if (xhr.status === 413) {
-                        errorMsg = 'File is too large. The server rejected the upload. Please check the web server configuration (e.g., Nginx client_max_body_size).';
-                    }
-
-                    importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Upload Error:</strong> ${errorMsg}</div>`;
-                    importProgressBar.classList.add('bg-danger');
-                    importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-                    setTimeout(resetImportModal, 8000);
+                    throw new Error('Server did not return a task ID for processing.');
                 }
-            });
 
-            // Upload error
-            currentXhr.addEventListener('error', () => {
-                currentXhr = null;
-                importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Network Error:</strong> The upload could not be completed.</div>`;
+            } catch (error) {
+                importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Upload Error:</strong> ${error.message}</div>`;
                 importProgressBar.classList.add('bg-danger');
                 importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-                setTimeout(resetImportModal, 5000);
-            });
-
-            // Upload aborted
-            currentXhr.addEventListener('abort', () => {
-                currentXhr = null;
-                console.log('Upload aborted.');
-            });
-
-            currentXhr.send(formData);
+                setTimeout(resetImportModal, 8000);
+            }
         });
     }
 
