@@ -45,6 +45,7 @@
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="dropdownMenuButton">
                         <li><a class="dropdown-item" href="/">Dashboard</a></li>
                         <li><a class="dropdown-item" href="/calendar">Calendar View</a></li>
+                        <li><a class="dropdown-item" href="/how-to">How-To Guide</a></li>
                         <li><a class="dropdown-item" href="/api-docs">API Details</a></li>
                         {% if current_user.is_authenticated %}
                             <li><hr class="dropdown-divider"></li>
@@ -108,7 +109,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="editModalLabel">Edit Entry</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="edit-form"></form>

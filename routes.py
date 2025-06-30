@@ -77,6 +77,10 @@ def init_routes(app, bcrypt):
     def api_docs():
         return render_template("api_docs.html")
 
+    @app.route("/how-to")
+    def how_to():
+        return render_template("how_to.html")
+
     @app.route("/api/hubs")
     def hubs_api():
         hubs = Hub.query.filter_by(is_active=True).order_by(Hub.display_order).all()
