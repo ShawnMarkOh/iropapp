@@ -512,102 +512,119 @@ document.addEventListener('DOMContentLoaded', async () => {
   allHubsMap = new Map([...defaultActiveHubs, ...defaultInactiveHubs].map(h => [h.iata, h]));
   window.allHubsMap = allHubsMap; // Expose globally for airport_adder
 
+  const runApp = async () => {
+    await initializeHubs();
+
+    // Main dashboard logic
+    await updateAdvisories();
+    await loadDashboard();
+    await fetchDbStatus();
+    
+    let dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
+    if (dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10))) {
+      let bannerContainer = document.getElementById('archive-banner-container');
+      bannerContainer.innerHTML = `<div class="archive-banner">Viewing archived weather for ${dateMatch[1]}</div>`;
+    }
+
+    // Handle resizing to enable/disable sortable
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            // Re-initialize sortable to enable/disable based on screen width
+            initSortable();
+        }, 250); // Debounce resize event
+    });
+
+    if (typeof io !== "undefined") {
+      const socket = io();
+      socket.on('dashboard_update', async function(data) {
+        console.log('Dashboard update received via websocket.');
+        await updateAdvisories();
+        await loadDashboard(true);
+        await fetchDbStatus();
+      });
+
+      socket.on('hub_order_update', async function(data) {
+        console.log('Hub order update received via websocket.', data);
+        const newOrder = data.order;
+        if (newOrder && Array.isArray(newOrder)) {
+          // Update the cookie for this user if they've consented
+          if (getCookie("cookie_consent") === "true") {
+              setCookie("card_order", newOrder.join(','), 365);
+          }
+          // Re-initialize hubs based on the new order
+          await initializeHubs();
+          
+          // Re-render the dashboard. This will use the new HUBS list to filter
+          // the full data and briefing.
+          renderFinalDashboard(dayLabels, fullDailyBrief, true);
+          initSortable();
+        }
+      });
+    }
+
+    // Check for action query parameter to open modal
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('action') === 'edit-hubs') {
+        const editHubsModalEl = document.getElementById('editHubsModal');
+        if (editHubsModalEl) {
+            const editHubsModal = new bootstrap.Modal(editHubsModalEl);
+            editHubsModal.show();
+            // Clean up URL
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }
+
+    // Listen for a new hub being added by airport_adder.js
+    document.addEventListener('newHubAdded', async (e) => {
+      const newHub = e.detail;
+      if (newHub && !allHubsMap.has(newHub.iata)) {
+          allHubsMap.set(newHub.iata, newHub);
+          defaultInactiveHubs.push(newHub);
+          console.log(`New hub ${newHub.iata} added to the application map.`);
+          // Reload dashboard data to include the new hub
+          await loadDashboard(true);
+      }
+    });
+  };
+
   // Welcome modal & Cookie consent check
   const consent = getCookie("cookie_consent");
   if (consent === null) {
       const welcomeModalEl = document.getElementById('welcomeModal');
       if (welcomeModalEl) {
           const welcomeModal = new bootstrap.Modal(welcomeModalEl);
+          const acceptBtn = document.getElementById('welcome-accept');
+          const declineBtn = document.getElementById('welcome-decline');
+
+          const cleanupAndRun = (consentValue) => {
+              setCookie("cookie_consent", consentValue, 365);
+              if (consentValue === "true") {
+                  const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
+                  setCookie("card_order", defaultOrder, 365);
+              }
+              welcomeModal.hide();
+              runApp();
+              // Remove listeners to prevent multiple calls
+              acceptBtn.removeEventListener('click', handleAccept);
+              declineBtn.removeEventListener('click', handleDecline);
+          };
+
+          const handleAccept = () => cleanupAndRun("true");
+          const handleDecline = () => cleanupAndRun("false");
+
+          acceptBtn?.addEventListener('click', handleAccept);
+          declineBtn?.addEventListener('click', handleDecline);
+          
           welcomeModal.show();
-
-          document.getElementById('welcome-accept')?.addEventListener('click', () => {
-              setCookie("cookie_consent", "true", 365);
-              // Save default order on accept
-              const defaultOrder = defaultActiveHubs.map(h => h.iata).join(',');
-              setCookie("card_order", defaultOrder, 365);
-              welcomeModal.hide();
-          });
-
-          document.getElementById('welcome-decline')?.addEventListener('click', () => {
-              setCookie("cookie_consent", "false", 365);
-              welcomeModal.hide();
-          });
+      } else {
+        // Fallback if modal element isn't there
+        runApp();
       }
+  } else {
+    // If consent is not null, run the app immediately
+    runApp();
   }
-
-  await initializeHubs();
-
-  // Main dashboard logic
-  await updateAdvisories();
-  await loadDashboard();
-  await fetchDbStatus();
-  
-  let dateMatch = window.location.search.match(/[?&]date=([0-9]{4}-[0-9]{2}-[0-9]{2})/);
-  if (dateMatch && dateMatch[1] !== (new Date().toISOString().slice(0,10))) {
-    let bannerContainer = document.getElementById('archive-banner-container');
-    bannerContainer.innerHTML = `<div class="archive-banner">Viewing archived weather for ${dateMatch[1]}</div>`;
-  }
-
-  // Handle resizing to enable/disable sortable
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-          // Re-initialize sortable to enable/disable based on screen width
-          initSortable();
-      }, 250); // Debounce resize event
-  });
-
-  if (typeof io !== "undefined") {
-    const socket = io();
-    socket.on('dashboard_update', async function(data) {
-      console.log('Dashboard update received via websocket.');
-      await updateAdvisories();
-      await loadDashboard(true);
-      await fetchDbStatus();
-    });
-
-    socket.on('hub_order_update', async function(data) {
-      console.log('Hub order update received via websocket.', data);
-      const newOrder = data.order;
-      if (newOrder && Array.isArray(newOrder)) {
-        // Update the cookie for this user if they've consented
-        if (getCookie("cookie_consent") === "true") {
-            setCookie("card_order", newOrder.join(','), 365);
-        }
-        // Re-initialize hubs based on the new order
-        await initializeHubs();
-        
-        // Re-render the dashboard. This will use the new HUBS list to filter
-        // the full data and briefing.
-        renderFinalDashboard(dayLabels, fullDailyBrief, true);
-        initSortable();
-      }
-    });
-  }
-
-  // Check for action query parameter to open modal
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('action') === 'edit-hubs') {
-      const editHubsModalEl = document.getElementById('editHubsModal');
-      if (editHubsModalEl) {
-          const editHubsModal = new bootstrap.Modal(editHubsModalEl);
-          editHubsModal.show();
-          // Clean up URL
-          const newUrl = window.location.pathname;
-          window.history.replaceState({}, document.title, newUrl);
-      }
-  }
-
-  // Listen for a new hub being added by airport_adder.js
-  document.addEventListener('newHubAdded', async (e) => {
-    const newHub = e.detail;
-    if (newHub && !allHubsMap.has(newHub.iata)) {
-        allHubsMap.set(newHub.iata, newHub);
-        defaultInactiveHubs.push(newHub);
-        console.log(`New hub ${newHub.iata} added to the application map.`);
-        // Reload dashboard data to include the new hub
-        await loadDashboard(true);
-    }
-  });
 });
