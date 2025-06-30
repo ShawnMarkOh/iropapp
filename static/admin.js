@@ -15,53 +15,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const file = dbFileInput.files[0];
-            const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
-            const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-            const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+            const formData = new FormData();
+            formData.append('db_file', file);
 
+            importStatusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Uploading and processing... This may take a moment.</div>`;
             importStatusEl.style.display = 'block';
-            importStatusEl.innerHTML = `<div class="alert alert-info">Preparing to upload...</div>`;
-            
+
             try {
-                for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-                    const start = chunkIndex * CHUNK_SIZE;
-                    const end = Math.min(start + CHUNK_SIZE, file.size);
-                    const chunk = file.slice(start, end);
-
-                    const formData = new FormData();
-                    formData.append('chunk', chunk, file.name);
-                    formData.append('upload_id', uploadId);
-                    formData.append('chunk_index', chunkIndex);
-                    
-                    const response = await fetch('/api/import-weather-db-chunk', {
-                        method: 'POST',
-                        body: formData,
-                    });
-
-                    if (!response.ok) {
-                        const result = await response.json();
-                        throw new Error(result.error || `Chunk ${chunkIndex + 1} upload failed.`);
-                    }
-                    
-                    const progress = Math.round(((chunkIndex + 1) / totalChunks) * 100);
-                    importStatusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Uploading file... (${progress}%)</div>`;
-                }
-
-                importStatusEl.innerHTML = `<div class="alert alert-info"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Upload complete. Processing data... This may take a moment.</div>`;
-
-                const completeResponse = await fetch('/api/import-weather-db-complete', {
+                const response = await fetch('/api/import-weather-db', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        upload_id: uploadId,
-                        filename: file.name,
-                        total_chunks: totalChunks
-                    })
+                    body: formData,
                 });
 
-                const result = await completeResponse.json();
-                if (!completeResponse.ok) {
-                    throw new Error(result.error || 'An unknown error occurred during processing.');
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'An unknown error occurred.');
                 }
 
                 const stats = result.stats;
