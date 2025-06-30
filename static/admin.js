@@ -139,18 +139,14 @@ document.addEventListener('DOMContentLoaded', () => {
             importStatusEl.innerHTML = `<div class="alert alert-info">Starting upload...</div>`;
 
             try {
-                // Slice the file into chunks upfront to create immutable snapshots.
-                // This prevents the 'net::ERR_UPLOAD_FILE_CHANGED' error if the
-                // source file is modified during a slow upload.
-                const chunks = [];
+                // The previous implementation pre-sliced all chunks, which could lead to high memory usage for large files.
+                // This version slices each chunk just-in-time. This is more memory efficient, but can be susceptible
+                // to `net::ERR_UPLOAD_FILE_CHANGED` if the source file is modified during the upload. Given the error persists,
+                // we are trying this more memory-friendly approach.
                 for (let i = 0; i < totalChunks; i++) {
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(start + CHUNK_SIZE, file.size);
-                    chunks.push(file.slice(start, end));
-                }
-
-                for (let i = 0; i < totalChunks; i++) {
-                    const chunk = chunks[i];
+                    const chunk = file.slice(start, end);
 
                     const formData = new FormData();
                     formData.append('file', chunk, file.name);
