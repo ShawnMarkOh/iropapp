@@ -332,6 +332,18 @@ body {
 }
 
 /* --- HOURLY BREAKDOWN STYLES --- */
+@keyframes pulse-current-hour {
+    0% {
+        box-shadow: 0 0 6px var(--risk-partial-bg);
+    }
+    50% {
+        box-shadow: 0 0 14px 2px var(--risk-partial-bg);
+    }
+    100% {
+        box-shadow: 0 0 6px var(--risk-partial-bg);
+    }
+}
+
 .hourly-breakdown { display: flex; flex-wrap: wrap; gap: 3px; }
 .hour-cell {
     font-size: 0.75rem;
@@ -359,7 +371,10 @@ body {
 .hour-wind { background-color: #3f51b5; color: white; }
 .hour-nodata { background-color: #444; color: #aaa; cursor: not-allowed; }
 [data-bs-theme="light"] .hour-nodata { background-color: #e9ecef; color: #6c757d; }
-.hour-current { border: 2px solid var(--risk-partial-bg); box-shadow: 0 0 8px var(--risk-partial-bg); }
+.hour-current { 
+    border: 2px solid var(--risk-partial-bg); 
+    animation: pulse-current-hour 2s infinite ease-in-out;
+}
 .hour-brief { opacity: 0.7; border-style: dashed; }
 .hour-ground-stop {
     background-color: var(--risk-high-bg);
