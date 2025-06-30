@@ -139,10 +139,18 @@ document.addEventListener('DOMContentLoaded', () => {
             importStatusEl.innerHTML = `<div class="alert alert-info">Starting upload...</div>`;
 
             try {
+                // Slice the file into chunks upfront to create immutable snapshots.
+                // This prevents the 'net::ERR_UPLOAD_FILE_CHANGED' error if the
+                // source file is modified during a slow upload.
+                const chunks = [];
                 for (let i = 0; i < totalChunks; i++) {
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(start + CHUNK_SIZE, file.size);
-                    const chunk = file.slice(start, end);
+                    chunks.push(file.slice(start, end));
+                }
+
+                for (let i = 0; i < totalChunks; i++) {
+                    const chunk = chunks[i];
 
                     const formData = new FormData();
                     formData.append('file', chunk, file.name);
@@ -191,7 +199,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
             } catch (error) {
-                importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Upload Error:</strong> ${error.message}</div>`;
+                let errorMessage = error.message;
+                if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                    errorMessage = "A network error occurred during upload. This can be caused by the source file being changed or moved during the upload process. Please try again.";
+                }
+                importStatusEl.innerHTML = `<div class="alert alert-danger"><strong>Upload Error:</strong> ${errorMessage}</div>`;
                 importProgressBar.classList.add('bg-danger');
                 importProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
                 setTimeout(resetImportModal, 8000);
