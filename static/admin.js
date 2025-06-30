@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const file = dbFileInput.files[0];
-            const CHUNK_SIZE = 500 * 1024; // 500KB
+            const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB
             const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
             const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substring(2)}`;
 
