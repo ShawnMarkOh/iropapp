@@ -235,7 +235,18 @@ def get_events_for_hub_day(hub_iata, local_dt, tz_str):
                 })
 
     for ae in after_events:
-        for hr in range(ae["from_hour"] + 1, 24):
+        start_hour = ae["from_hour"] + 1
+        end_hour = 24
+
+        # If from_hour is -1, it means the event started on a previous day.
+        if ae["from_hour"] == -1:
+            # This event is carried over from a previous day.
+            # Cap it at 02:00 local time to prevent old advisories from lingering.
+            # This applies to hours 0, 1, 2. The range end should be 3.
+            start_hour = 0
+            end_hour = 3
+
+        for hr in range(start_hour, end_hour):
             result.append({
                 "local_hour": hr, "local_minute": 0, "local_time_str": f"{hr:02d}:00",
                 "z_hour": None, "z_minute": None, "desc": ae["desc"], "zulu_time": ae["zulu_time"],
