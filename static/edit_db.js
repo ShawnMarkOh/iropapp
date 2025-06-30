@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </select>`;
             } else if (type === 'number') {
                 inputHtml = `<input type="number" class="form-control" id="edit-${col}" value="${value || ''}" data-col="${col}">`;
-            } else if (typeof value === 'string' && value.length > 100) {
+            } else if (col === 'runways_json' || (typeof value === 'string' && (value.includes('\n') || value.length > 100))) {
                 inputHtml = `<textarea class="form-control" id="edit-${col}" rows="4" data-col="${col}">${value || ''}</textarea>`;
             } else {
                 inputHtml = `<input type="text" class="form-control" id="edit-${col}" value="${value || ''}" data-col="${col}">`;
