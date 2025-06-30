@@ -1,6 +1,7 @@
 # --- START OF FILE database.py ---
 
 import json
+from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 
@@ -74,6 +75,15 @@ class HourlySnapshot(db.Model):
             "hour": self.hour,
             **json.loads(self.snapshot_json)
         }
+
+class AviationForecastDiscussion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    cwa = db.Column(db.String(10), unique=True, nullable=False, index=True)
+    discussion_text = db.Column(db.Text, nullable=False)
+    last_updated = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<AviationForecastDiscussion {self.cwa}>'
 
 def init_db(app):
     with app.app_context():

@@ -11,8 +11,8 @@ from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 
-from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE, AVIATION_FORECAST_DISCUSSION_CACHE
-from database import db, HourlyWeather, HourlySnapshot, Hub
+from config import HUBS, INACTIVE_HUBS, LOG_FILE, FAA_OPS_PLAN_URL_CACHE, GROUND_STOPS_CACHE, GROUND_DELAYS_CACHE
+from database import db, HourlyWeather, HourlySnapshot, Hub, AviationForecastDiscussion
 
 NWS_GRID_CACHE = {}
 
@@ -74,28 +74,39 @@ def fetch_aviation_forecast_discussion(cwa):
     
     cwa = cwa.lower()
     now = datetime.utcnow()
-    cache = AVIATION_FORECAST_DISCUSSION_CACHE
+    cache_duration_seconds = 20 * 60  # 20 minutes
+
+    cached_discussion = AviationForecastDiscussion.query.filter_by(cwa=cwa).first()
     
-    if cwa in cache:
-        cached_time = cache[cwa]["time"]
-        cached_data = cache[cwa]["data"]
-        # If we have data, cache for 10 mins (600s). If it was an error (None), cache for 1 min (60s).
-        cache_duration = 600 if cached_data is not None else 60
-        if (now - cached_time).total_seconds() < cache_duration:
-            return cached_data
+    if cached_discussion and (now - cached_discussion.last_updated).total_seconds() < cache_duration_seconds:
+        return cached_discussion.discussion_text
 
     try:
         url = f"https://aviationweather.gov/api/data/fcstdisc?cwa={cwa}&type=afd"
         resp = requests.get(url, timeout=15)
         resp.raise_for_status()
-        # The response is plain text.
         discussion_text = resp.text
-        cache[cwa] = {"data": discussion_text, "time": now}
+
+        if not discussion_text.strip():
+             print(f"Received empty forecast discussion for {cwa}.")
+             return cached_discussion.discussion_text if cached_discussion else None
+
+        if cached_discussion:
+            cached_discussion.discussion_text = discussion_text
+        else:
+            new_discussion = AviationForecastDiscussion(
+                cwa=cwa,
+                discussion_text=discussion_text
+            )
+            db.session.add(new_discussion)
+        
+        db.session.commit()
         return discussion_text
     except requests.RequestException as e:
         print(f"Error fetching aviation forecast discussion for {cwa}: {e}")
-        # Cache the error to avoid spamming the API
-        cache[cwa] = {"data": None, "time": now}
+        if cached_discussion:
+            print(f"Returning stale discussion for {cwa} due to fetch error.")
+            return cached_discussion.discussion_text
         return None
 
 def get_latest_ops_plan_json():

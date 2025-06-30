@@ -14,12 +14,13 @@ from werkzeug.utils import secure_filename
 
 import config
 import services
-from database import db, HourlyWeather, HourlySnapshot, Hub, User
+from database import db, HourlyWeather, HourlySnapshot, Hub, User, AviationForecastDiscussion
 
 EDITABLE_MODELS = {
     'default': {
         'hourly_weather': HourlyWeather,
         'hourly_snapshot': HourlySnapshot,
+        'aviation_forecast_discussion': AviationForecastDiscussion,
     },
     'airports': {
         'user': User,
