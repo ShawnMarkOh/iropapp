@@ -71,6 +71,15 @@ def init_routes(app, bcrypt):
     def admin_logs():
         return render_template("admin_logs.html")
 
+    @app.route("/admin/export-db")
+    @login_required
+    def export_db():
+        try:
+            return send_from_directory(config.DATA_DIR, 'weatherlog.db', as_attachment=True)
+        except FileNotFoundError:
+            flash('Database file not found.', 'danger')
+            return redirect(url_for('admin_panel'))
+
     @app.route("/")
     def dashboard():
         return render_template("index.html")
